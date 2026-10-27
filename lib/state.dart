@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier, ValueNotifier;
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 

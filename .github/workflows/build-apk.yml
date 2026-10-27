@@ -45,7 +45,10 @@ jobs:
           code=$?
           cat analyze.txt
           if [ $code -ne 0 ]; then
-            grep -E "^ *error" analyze.txt | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+            for chunk in 0 1 2 3 4 5 6 7; do
+              msg=$(grep -E "^ *error" analyze.txt | sed -n "$((chunk*8+1)),$((chunk*8+8))p" | sed 's/^ *error • //' | awk 'BEGIN{ORS="%0A"}{print}')
+              [ -n "$msg" ] && echo "::error::$msg"
+            done
           fi
           exit $code
 
