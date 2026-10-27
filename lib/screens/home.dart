@@ -77,6 +77,27 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
 
+                if (app.backupDue)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+                    child: Material(
+                      color: warnColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      child: ListTile(
+                        leading: const Icon(Icons.backup_outlined, color: warnColor),
+                        title: Text(
+                          app.daysSinceBackup == null
+                              ? 'Back up your data to Gmail'
+                              : 'Last backup was ${app.daysSinceBackup} days ago',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: const Text('Your entries live only on this phone'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => emailBackupFlow(context),
+                      ),
+                    ),
+                  ),
+
                 // Summary
                 SectionCard(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

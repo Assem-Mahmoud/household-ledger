@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../defaults.dart';
 import '../models.dart';
+import '../native.dart';
 import '../periods.dart';
 import '../sms_parser.dart';
 import '../state.dart';
@@ -149,7 +150,60 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RulesScreen())),
             ),
 
+            _header(context, 'Backup to Gmail'),
+            ListTile(
+              title: const Text('Backup email'),
+              subtitle: Text((app.settings['backupEmail'] ?? '').isEmpty
+                  ? 'Not set — Gmail opens with an empty "To"'
+                  : app.settings['backupEmail']!),
+              trailing: const Icon(Icons.alternate_email),
+              onTap: () => _editText(context, 'Backup email', 'backupEmail',
+                  help: 'Backups are emailed here, usually your own Gmail address.'),
+            ),
+            ListTile(
+              title: const Text('Email a backup now'),
+              subtitle: Text(app.daysSinceBackup == null
+                  ? 'Never backed up'
+                  : app.daysSinceBackup == 0
+                      ? 'Last backup: today'
+                      : 'Last backup: ${app.daysSinceBackup} day${app.daysSinceBackup == 1 ? '' : 's'} ago'),
+              trailing: Icon(Icons.backup_outlined, color: app.backupDue ? warnColor : null),
+              onTap: () => emailBackupFlow(context),
+            ),
+            ListTile(
+              title: const Text('Restore from backup'),
+              subtitle: const Text('Pick a backup file saved from Gmail, Downloads or Drive'),
+              trailing: const Icon(Icons.settings_backup_restore),
+              onTap: () => _restore(context),
+            ),
+
             _header(context, 'Data'),
+            ListTile(
+              title: const Text('Import entries from a CSV file'),
+              subtitle: const Text('Statements or the web ledger export. Entries already in the app are skipped.'),
+              trailing: const Icon(Icons.upload_file),
+              onTap: () => _importFile(context),
+            ),
+            ListTile(
+              title: const Text('Email entries as CSV'),
+              subtitle: Text('${app.txns.length} entries · opens in Excel or Google Sheets'),
+              trailing: const Icon(Icons.table_view_outlined),
+              onTap: () async {
+                try {
+                  await Native.emailFile(
+                    content: app.exportCsv(),
+                    fileName: 'household-ledger-${isoDate(DateTime.now())}.csv',
+                    to: app.settings['backupEmail'] ?? '',
+                    subject: 'Household Ledger entries ${isoDate(DateTime.now())}',
+                    body: 'All entries as CSV.',
+                  );
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open email: $e')));
+                  }
+                }
+              },
+            ),
             ListTile(
               title: const Text('Copy all entries as CSV'),
               subtitle: Text('${app.txns.length} entries · paste into Excel or Google Sheets'),
@@ -162,14 +216,15 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             ListTile(
-              title: const Text('Import entries from CSV'),
-              subtitle: const Text('Paste rows with a header: date,type,category,amount,note'),
+              title: const Text('Paste CSV rows'),
+              subtitle: const Text('Header: date,type,category,amount,note'),
               trailing: const Icon(Icons.content_paste),
               onTap: () => _import(context),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Text('All data is stored only on this phone. Export regularly to keep a backup.',
+              child: Text(
+                  'Data is stored only on this phone. Uninstalling the app deletes it, so keep a recent backup in Gmail.',
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5)),
             ),
           ]),
@@ -249,6 +304,58 @@ class SettingsScreen extends StatelessWidget {
         );
       }),
     );
+  }
+
+  Future<void> _restore(BuildContext context) async {
+    String? text;
+    try {
+      text = await Native.pickFileText();
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open the file: $e')));
+      return;
+    }
+    if (text == null || !context.mounted) return;
+    final summary = app.describeBackup(text);
+    if (summary == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('That file is not a Household Ledger backup (.json from "Email a backup").')));
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Restore this backup?'),
+        content: Text('$summary\n\nEverything currently in the app (${app.txns.length} entries, budgets, rules and '
+            'settings) will be replaced. Email a backup first if you might need the current data.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Replace and restore')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final msg = await app.restoreBackup(text);
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _importFile(BuildContext context) async {
+    String? text;
+    try {
+      text = await Native.pickFileText();
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open the file: $e')));
+      return;
+    }
+    if (text == null || !context.mounted) return;
+    if (app.describeBackup(text) != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('That is a full backup. Use "Restore from backup" instead.')));
+      return;
+    }
+    final msg = await app.importCsv(text);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+    }
   }
 
   Future<void> _import(BuildContext context) async {
@@ -618,5 +725,47 @@ class _SendersScreenState extends State<SendersScreen> {
         ),
       ]),
     );
+  }
+}
+
+/// Asks for the backup address the first time, then opens Gmail with the backup attached.
+Future<void> emailBackupFlow(BuildContext context) async {
+  if ((app.settings['backupEmail'] ?? '').isEmpty) {
+    final ctl = TextEditingController();
+    final email = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Where should backups go?'),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(
+            labelText: 'Your Gmail address',
+            helperText: 'Saved for next time. You can change it in Settings.',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, ctl.text.trim()), child: const Text('Continue')),
+        ],
+      ),
+    );
+    if (email == null) return;
+    if (email.isNotEmpty) await app.setSetting('backupEmail', email);
+  }
+  try {
+    final how = await app.emailBackup();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(how == 'gmail'
+            ? 'Gmail opened with the backup attached. Tap Send to finish.'
+            : 'Choose your mail app, then tap Send to finish.'),
+      ));
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open email: $e')));
+    }
   }
 }

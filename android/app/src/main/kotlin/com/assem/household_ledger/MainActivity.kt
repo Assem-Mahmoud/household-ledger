@@ -1,7 +1,12 @@
 package com.assem.household_ledger
 
 import android.Manifest
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Context
+import android.content.Intent
+import java.io.File
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -16,6 +21,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     private var pendingPermissionResult: MethodChannel.Result? = null
+    private var pendingPickResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -90,6 +96,37 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "emailFile" -> {
+                        try {
+                            result.success(
+                                emailFile(
+                                    call.argument<String>("content") ?: "",
+                                    call.argument<String>("fileName") ?: "backup.json",
+                                    call.argument<String>("to") ?: "",
+                                    call.argument<String>("subject") ?: "",
+                                    call.argument<String>("body") ?: ""
+                                )
+                            )
+                        } catch (e: Exception) {
+                            result.error("email_failed", e.message, null)
+                        }
+                    }
+
+                    "pickFile" -> {
+                        pendingPickResult?.success(null)
+                        pendingPickResult = result
+                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "*/*"
+                        }
+                        try {
+                            startActivityForResult(intent, PICK_REQUEST)
+                        } catch (e: ActivityNotFoundException) {
+                            pendingPickResult = null
+                            result.error("no_picker", "No file picker available", null)
+                        }
+                    }
+
                     else -> result.notImplemented()
                 }
             }
@@ -115,6 +152,54 @@ class MainActivity : FlutterActivity() {
             pendingPermissionResult?.success(status())
             pendingPermissionResult = null
         }
+    }
+
+    /** Writes the file privately and opens Gmail (or any mail app) with it attached. Returns the app used. */
+    private fun emailFile(content: String, fileName: String, to: String, subject: String, body: String): String {
+        val safeName = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val dir = BackupProvider.dir(this)
+        dir.listFiles()?.forEach { if (it.name != safeName) it.delete() }
+        File(dir, safeName).writeText(content, Charsets.UTF_8)
+        val uri = BackupProvider.uriFor(safeName)
+
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = if (safeName.endsWith(".csv")) "text/csv" else "application/json"
+            if (to.isNotBlank()) putExtra(Intent.EXTRA_EMAIL, arrayOf(to.trim()))
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri(safeName, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val gmail = Intent(send).setPackage("com.google.android.gm")
+        return try {
+            startActivity(gmail)
+            "gmail"
+        } catch (e: ActivityNotFoundException) {
+            startActivity(Intent.createChooser(send, "Send backup").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            "chooser"
+        }
+    }
+
+    @Deprecated("Uses the platform activity-result API, which FlutterActivity still forwards")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PICK_REQUEST) return
+        val callback = pendingPickResult ?: return
+        pendingPickResult = null
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) {
+            callback.success(null)
+            return
+        }
+        Thread {
+            try {
+                val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                runOnUiThread { callback.success(text) }
+            } catch (e: Exception) {
+                runOnUiThread { callback.error("read_failed", e.message, null) }
+            }
+        }.start()
     }
 
     private fun readInbox(since: Long, until: Long): List<Map<String, Any>> {
@@ -144,6 +229,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val PERMISSION_REQUEST = 4711
+        private const val PICK_REQUEST = 4712
         const val POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"
     }
 }

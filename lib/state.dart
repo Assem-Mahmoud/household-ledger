@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart' show ChangeNotifier, ValueNotifier;
@@ -278,6 +279,8 @@ class AppState extends ChangeNotifier {
   Future<void> saveTxn(Txn t) async {
     if (t.id == null) {
       t.id = await db.insert('txns', t.toMap());
+      // a card purchase typed in by hand clears its matching bank SMS from Review
+      if (t.smsKey == null && await _linkPendingToEntries() > 0) await _loadPending();
     } else {
       await db.update('txns', t.toMap(), where: 'id = ?', whereArgs: [t.id]);
     }
@@ -403,7 +406,7 @@ class AppState extends ChangeNotifier {
           : int.tryParse(settings['smsLastScan'] ?? '') ?? periodFor(DateTime.now(), cycleStartDay).start.millisecondsSinceEpoch;
       final until = to != null ? DateTime(to.year, to.month, to.day, 23, 59, 59, 999).millisecondsSinceEpoch : null;
       final messages = await Native.readSms(since, untilMillis: until);
-      var added = 0, matched = 0;
+      var added = 0, matched = 0, linked = 0;
       var newest = int.tryParse(settings['smsLastScan'] ?? '') ?? 0;
 
       for (final msg in messages) {
@@ -417,6 +420,17 @@ class AppState extends ChangeNotifier {
         final key = '$sender|$date';
         final exists = await db.query('sms_inbox', columns: ['id'], where: 'sms_key = ?', whereArgs: [key]);
         if (exists.isNotEmpty) continue;
+        // Already entered by hand or imported from a statement? Link it instead of adding it twice.
+        final linkedId = await _linkToExisting(key, date, parsed);
+        if (linkedId != null) {
+          await db.insert('sms_inbox', {
+            'sms_key': key, 'sender': sender, 'body': body, 'received_at': date,
+            'amount': parsed.amount, 'kind': parsed.kind, 'merchant': parsed.merchant, 'status': 'confirmed',
+            'category_id': linkedId,
+          });
+          linked++;
+          continue;
+        }
         await db.insert('sms_inbox', {
           'sms_key': key, 'sender': sender, 'body': body, 'received_at': date,
           'amount': parsed.amount, 'kind': parsed.kind, 'merchant': parsed.merchant, 'status': 'pending',
@@ -428,21 +442,60 @@ class AppState extends ChangeNotifier {
         await setSetting('smsLastScan', '$newest', notify: false);
       }
       await _loadPending();
+      if (linked > 0) await _loadTxns();
       final window = ranged
           ? ' between ${from != null ? shortDate(from) : 'the start'} and ${to != null ? shortDate(to) : 'today'}'
           : '';
+      final linkNote = linked > 0 ? ' $linked matched entries you already had, so they weren\'t added again.' : '';
       if (added == 0) {
         return matched == 0
             ? 'No bank transactions found$window (${messages.length} messages checked).'
-            : 'No new transactions$window. $matched were already reviewed.';
+            : 'No new transactions$window.$linkNote${linked == 0 ? ' $matched were already reviewed.' : ''}';
       }
-      return '$added new transaction${added == 1 ? '' : 's'} to review$window.';
+      return '$added new transaction${added == 1 ? '' : 's'} to review$window.$linkNote';
     } catch (e) {
       return 'Could not read messages ($e).';
     } finally {
       scanning = false;
       notifyListeners();
     }
+  }
+
+  /// Finds an imported or manual entry with the same day, direction and amount that no SMS is linked to yet,
+  /// links this SMS to it, and returns its category id. Returns null when there is no such entry.
+  Future<int?> _linkToExisting(String key, int receivedAt, ParsedSms parsed) async {
+    final day = isoDate(DateTime.fromMillisecondsSinceEpoch(receivedAt));
+    final rows = await db.query('txns',
+        columns: ['id', 'category_id', 'merchant'],
+        where: "date = ? AND kind = ? AND ABS(amount - ?) < 0.01 AND sms_key IS NULL AND source IN ('import', 'manual')",
+        whereArgs: [day, parsed.kind, parsed.amount],
+        orderBy: 'id',
+        limit: 1);
+    if (rows.isEmpty) return null;
+    final r = rows.first;
+    await db.update(
+        'txns',
+        {
+          'sms_key': key,
+          if (((r['merchant'] as String?) ?? '').isEmpty && parsed.merchant.isNotEmpty) 'merchant': parsed.merchant,
+        },
+        where: 'id = ?',
+        whereArgs: [r['id']]);
+    return r['category_id'] as int;
+  }
+
+  /// Waiting SMS that match an existing (imported or manual) entry are linked to it and leave the review list.
+  Future<int> _linkPendingToEntries() async {
+    final rows = await db.query('sms_inbox', where: 'status = ?', whereArgs: ['pending']);
+    var n = 0;
+    for (final r in rows) {
+      final it = SmsItem.fromMap(r);
+      final catId = await _linkToExisting(it.smsKey, it.receivedAt, ParsedSms(it.amount, it.kind, it.merchant));
+      if (catId == null) continue;
+      await db.update('sms_inbox', {'status': 'confirmed', 'category_id': catId}, where: 'id = ?', whereArgs: [it.id]);
+      n++;
+    }
+    return n;
   }
 
   /// Re-reads waiting items with the current parser and filters (after a settings change or app update).
@@ -578,7 +631,15 @@ class AppState extends ChangeNotifier {
     final iDate = col(['date']), iType = col(['type', 'kind']), iCat = col(['category']);
     final iAmt = col(['amount', 'amount_sar']), iNote = col(['note']), iMer = col(['merchant']);
     if (iDate < 0 || iAmt < 0) return 'The header needs at least "date" and "amount" columns.';
-    var added = 0, skipped = 0;
+    var added = 0, skipped = 0, duplicates = 0;
+    // How many entries already exist per day/direction/amount, so re-importing or overlapping
+    // with SMS-confirmed entries never double-counts.
+    String dupKey(String date, String kind, double amount) => '$date|$kind|${(amount * 100).round()}';
+    final existing = <String, int>{};
+    for (final t in txns) {
+      final k = dupKey(t.date, t.kind, t.amount);
+      existing[k] = (existing[k] ?? 0) + 1;
+    }
     final batch = db.batch();
     for (final r in rows.skip(1)) {
       String at(int i) => i >= 0 && i < r.length ? r[i].trim() : '';
@@ -589,6 +650,12 @@ class AppState extends ChangeNotifier {
         continue;
       }
       var kind = at(iType).toLowerCase() == 'income' ? 'income' : 'expense';
+      final dk = dupKey(date, kind, amount.abs());
+      if ((existing[dk] ?? 0) > 0) {
+        existing[dk] = existing[dk]! - 1;
+        duplicates++;
+        continue;
+      }
       final name = at(iCat);
       var c = name.isEmpty ? null : catByName(name);
       if (c == null && name.isNotEmpty) c = await addCategory(name, kind, kind == 'income' ? 'income' : 'want');
@@ -599,9 +666,101 @@ class AppState extends ChangeNotifier {
       added++;
     }
     await batch.commit(noResult: true);
+    final linkedPending = await _linkPendingToEntries();
     await _loadTxns();
+    await _loadPending();
     notifyListeners();
-    return 'Imported $added entr${added == 1 ? 'y' : 'ies'}${skipped > 0 ? ', skipped $skipped' : ''}.';
+    final parts = <String>[
+      'Imported $added entr${added == 1 ? 'y' : 'ies'}',
+      if (duplicates > 0) '$duplicates already in the app were skipped',
+      if (skipped > 0) '$skipped unreadable rows ignored',
+      if (linkedPending > 0) '$linkedPending waiting SMS matched imported entries and were cleared from Review',
+    ];
+    return '${parts.join(', ')}.';
+  }
+
+  // ------------------------------------------------------- backup / restore
+
+  static const _backupTables = ['categories', 'txns', 'budget_overrides', 'sms_inbox', 'rules', 'settings', 'alerts'];
+
+  Future<String> backupJson() async {
+    final data = <String, Object?>{
+      'app': 'household_ledger',
+      'format': 1,
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+    for (final t in _backupTables) {
+      data[t] = await db.query(t);
+    }
+    return const JsonEncoder.withIndent(' ').convert(data);
+  }
+
+  /// Opens Gmail with a full backup attached. The user taps Send.
+  Future<String> emailBackup() async {
+    final now = DateTime.now();
+    final name = 'household-ledger-backup-${isoDate(now)}.json';
+    final json = await backupJson();
+    final how = await Native.emailFile(
+      content: json,
+      fileName: name,
+      to: settings['backupEmail'] ?? '',
+      subject: 'Household Ledger backup ${isoDate(now)}',
+      body: 'Backup of ${txns.length} entries, created ${isoDate(now)} ${two(now.hour)}:${two(now.minute)}.\n'
+          'To restore: save the attached file, then in the app open Settings → Restore from backup.',
+    );
+    await setSetting('lastBackup', '${now.millisecondsSinceEpoch}');
+    return how;
+  }
+
+  int? get daysSinceBackup {
+    final ms = int.tryParse(settings['lastBackup'] ?? '');
+    if (ms == null) return null;
+    return DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ms)).inDays;
+  }
+
+  bool get backupDue => txns.isNotEmpty && (daysSinceBackup == null || daysSinceBackup! >= 7);
+
+  /// Summary of a backup file before restoring, or null if it isn't one.
+  String? describeBackup(String text) {
+    try {
+      final d = jsonDecode(text);
+      if (d is! Map || d['app'] != 'household_ledger') return null;
+      final n = (d['txns'] as List?)?.length ?? 0;
+      final created = (d['createdAt'] as String?)?.substring(0, 10) ?? 'unknown date';
+      return 'Backup from $created with $n entries.';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Replaces everything in the app with the backup's contents.
+  Future<String> restoreBackup(String text) async {
+    final d = jsonDecode(text) as Map<String, dynamic>;
+    if (d['app'] != 'household_ledger') return 'This file is not a Household Ledger backup.';
+    final keepBackupInfo = {'backupEmail': settings['backupEmail'], 'lastBackup': settings['lastBackup']};
+    await db.transaction((tx) async {
+      for (final t in _backupTables) {
+        final rows = d[t];
+        if (rows is! List) continue;
+        await tx.delete(t);
+        for (final r in rows) {
+          await tx.insert(t, Map<String, Object?>.from(r as Map), conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+    });
+    await _loadSettings();
+    for (final e in keepBackupInfo.entries) {
+      if (e.value != null && (settings[e.key] ?? '').isEmpty) await setSetting(e.key, e.value!, notify: false);
+    }
+    await _loadCategories();
+    await _loadTxns();
+    await _loadOverrides();
+    await _loadRules();
+    await _loadPending();
+    period = periodFor(DateTime.now(), cycleStartDay);
+    await applyReminder();
+    notifyListeners();
+    return 'Restored ${txns.length} entries.';
   }
 
   List<List<String>> _parseCsv(String s) {
