@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Category;
 
 import '../format.dart';
+import '../i18n.dart';
 import '../models.dart';
 import '../periods.dart';
 import '../state.dart';
@@ -26,13 +27,13 @@ class PlanTab extends StatelessWidget {
             heroTag: 'plan-add',
             onPressed: () => editPlanItem(context, null),
             icon: const Icon(Icons.add_task),
-            label: const Text('Add to plan'),
+            label: const T('Add to plan'),
           ),
           body: ListView(padding: const EdgeInsets.only(bottom: 96), children: [
             const Padding(padding: EdgeInsets.only(top: 4), child: Center(child: PeriodSwitcher())),
             SectionCard(
               child: lines.isEmpty
-                  ? Text(
+                  ? T(
                       'Plan what must happen each month: rent to pay, school fees, an amount to save. '
                       'Tick each one off when it\'s done, or link it to a category to tick it automatically.',
                       style: TextStyle(color: cs.onSurfaceVariant),
@@ -40,7 +41,7 @@ class PlanTab extends StatelessWidget {
                   : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       Row(children: [
                         Expanded(
-                          child: Text('${lines.where((l) => l.done).length} of ${lines.length} done',
+                          child: Text(tr('{a} of {b} done', {'a': lines.where((l) => l.done).length, 'b': lines.length}),
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                         ),
                         Text('${fmt(doneAmount)} / ${fmt(total)}',
@@ -51,8 +52,8 @@ class PlanTab extends StatelessWidget {
                       if (income > 0) ...[
                         const SizedBox(height: 10),
                         Text(
-                          'Income ${fmt(income)} − plan ${fmt(total)} = ${fmt(income - total)} ${app.currency} '
-                          'left for day-to-day spending',
+                          tr('Income {i} − plan {p} = {r} {cur} left for day-to-day spending',
+                              {'i': fmt(income), 'p': fmt(total), 'r': fmt(income - total), 'cur': app.currency}),
                           style: TextStyle(
                               color: income - total < 0 ? badColor : cs.onSurfaceVariant, fontSize: 13),
                         ),
@@ -80,10 +81,10 @@ class PlanTile extends StatelessWidget {
     final it = line.item;
     final status = line.status;
     final statusText = switch (status) {
-      'done' => line.autoDone && !line.manualDone ? 'Done (from entries)' : 'Done',
-      'overdue' => 'Overdue since ${shortDate(line.due!)}',
-      'due' => 'Due ${shortDate(line.due!)}',
-      _ => line.due != null ? 'By ${shortDate(line.due!)}' : 'This month',
+      'done' => tr(line.autoDone && !line.manualDone ? 'Done (from entries)' : 'Done'),
+      'overdue' => tr('Overdue since {d}', {'d': shortDate(line.due!)}),
+      'due' => tr('Due {d}', {'d': shortDate(line.due!)}),
+      _ => line.due != null ? tr('By {d}', {'d': shortDate(line.due!)}) : tr('This month'),
     };
     final statusColor = switch (status) {
       'done' => goodColor,
@@ -119,13 +120,13 @@ class PlanTile extends StatelessWidget {
             const SizedBox(height: 2),
             Row(children: [
               Expanded(child: Text(statusText, style: TextStyle(color: statusColor, fontSize: 12.5))),
-              if (line.overridden) Text('this month', style: TextStyle(color: cs.primary, fontSize: 12)),
+              if (line.overridden) T('this month', style: TextStyle(color: cs.primary, fontSize: 12)),
             ]),
             if (linked != null && !line.done && !dense) ...[
               const SizedBox(height: 6),
               BudgetBar(spent: line.progress, budget: line.target, color: goodColor),
               const SizedBox(height: 3),
-              Text('${fmt(line.progress)} logged under ${linked.name}',
+              Text(tr('{a} logged under {cat}', {'a': fmt(line.progress), 'cat': linked.display}),
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
             ],
             const SizedBox(height: 8),
@@ -161,12 +162,12 @@ Future<void> editPlanItem(BuildContext context, PlanLine? line) async {
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(c).viewInsets.bottom + 20),
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text(existing == null ? 'Add to plan' : 'Edit plan item', style: Theme.of(c).textTheme.titleLarge),
+            Text(tr(existing == null ? 'Add to plan' : 'Edit plan item'), style: Theme.of(c).textTheme.titleLarge),
             const SizedBox(height: 14),
             SegmentedButton<String>(
               segments: const [
-                ButtonSegment(value: 'pay', label: Text('Pay'), icon: Icon(Icons.receipt_outlined)),
-                ButtonSegment(value: 'save', label: Text('Save'), icon: Icon(Icons.savings_outlined)),
+                ButtonSegment(value: 'pay', label: T('Pay'), icon: Icon(Icons.receipt_outlined)),
+                ButtonSegment(value: 'save', label: T('Save'), icon: Icon(Icons.savings_outlined)),
               ],
               selected: {kind},
               onSelectionChanged: (s) => setState(() => kind = s.first),
@@ -177,8 +178,8 @@ Future<void> editPlanItem(BuildContext context, PlanLine? line) async {
               autofocus: existing == null,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                labelText: kind == 'save' ? 'What are you saving for?' : 'What to pay',
-                hintText: kind == 'save' ? 'e.g. Rent fund, Emergency fund' : 'e.g. Rent, School fees',
+                labelText: tr(kind == 'save' ? 'What are you saving for?' : 'What to pay'),
+                hintText: tr(kind == 'save' ? 'e.g. Rent fund, Emergency fund' : 'e.g. Rent, School fees'),
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -187,15 +188,15 @@ Future<void> editPlanItem(BuildContext context, PlanLine? line) async {
               controller: amountCtl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                labelText: 'Amount this month', suffixText: app.currency, border: const OutlineInputBorder()),
+                labelText: tr('Amount this month'), suffixText: app.currency, border: const OutlineInputBorder()),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<int?>(
               value: dueDay,
-              decoration: const InputDecoration(labelText: 'Due by', border: OutlineInputBorder()),
+              decoration: InputDecoration(labelText: tr('Due by'), border: const OutlineInputBorder()),
               items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('Any time this month')),
-                for (var d = 1; d <= 31; d++) DropdownMenuItem<int?>(value: d, child: Text('Day $d')),
+                const DropdownMenuItem<int?>(value: null, child: T('Any time this month')),
+                for (var d = 1; d <= 31; d++) DropdownMenuItem<int?>(value: d, child: Text(tr('Day {n}', {'n': d}))),
               ],
               onChanged: (v) => setState(() => dueDay = v),
             ),
@@ -203,18 +204,18 @@ Future<void> editPlanItem(BuildContext context, PlanLine? line) async {
             DropdownButtonFormField<int?>(
               value: categoryId,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Tick automatically from category (optional)',
-                helperText: 'Ticks itself once entries in this category reach the amount',
+              decoration: InputDecoration(
+                labelText: tr('Tick automatically from category (optional)'),
+                helperText: tr('Ticks itself once entries in this category reach the amount'),
                 helperMaxLines: 2,
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
               items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('No, I\'ll tick it myself')),
+                const DropdownMenuItem<int?>(value: null, child: T('No, I\'ll tick it myself')),
                 for (final cat in app.active('expense'))
                   DropdownMenuItem<int?>(
                     value: cat.id,
-                    child: Row(children: [CategoryDot(cat.color), const SizedBox(width: 8), Text(cat.name)]),
+                    child: Row(children: [CategoryDot(cat.color), const SizedBox(width: 8), Text(cat.display)]),
                   ),
               ],
               onChanged: (v) => setState(() => categoryId = v),
@@ -222,8 +223,8 @@ Future<void> editPlanItem(BuildContext context, PlanLine? line) async {
             if (existing == null)
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Repeat every month'),
-                subtitle: Text(recurring ? 'Added to every month from ${per.label}' : 'Only for ${per.label}'),
+                title: const T('Repeat every month'),
+                subtitle: Text(tr(recurring ? 'Added to every month from {m}' : 'Only for {m}', {'m': per.label})),
                 value: recurring,
                 onChanged: (v) => setState(() => recurring = v),
               ),
@@ -236,33 +237,33 @@ Future<void> editPlanItem(BuildContext context, PlanLine? line) async {
               FilledButton(
                 onPressed: () {
                   if (titleCtl.text.trim().isEmpty || (parseAmount(amountCtl.text) ?? 0) <= 0) {
-                    setState(() => error = 'Enter a name and an amount above zero.');
+                    setState(() => error = tr('Enter a name and an amount above zero.'));
                     return;
                   }
                   Navigator.pop(c, 'add');
                 },
-                child: const Text('Add'),
+                child: const T('Add'),
               )
             else ...[
               if (existing.recurring)
-                FilledButton(onPressed: () => Navigator.pop(c, 'all'), child: const Text('Save for every month')),
+                FilledButton(onPressed: () => Navigator.pop(c, 'all'), child: const T('Save for every month')),
               if (existing.recurring) const SizedBox(height: 8),
               if (existing.recurring)
                 OutlinedButton(
                   onPressed: () => Navigator.pop(c, 'month'),
-                  child: Text('Change amount for ${per.label} only'),
+                  child: Text(tr('Change amount for {m} only', {'m': per.label})),
                 )
               else
-                FilledButton(onPressed: () => Navigator.pop(c, 'month'), child: const Text('Save')),
+                FilledButton(onPressed: () => Navigator.pop(c, 'month'), child: const T('Save')),
               if (line!.overridden) ...[
                 const SizedBox(height: 8),
-                TextButton(onPressed: () => Navigator.pop(c, 'reset'), child: const Text('Use the usual amount this month')),
+                TextButton(onPressed: () => Navigator.pop(c, 'reset'), child: const T('Use the usual amount this month')),
               ],
               const SizedBox(height: 8),
               TextButton(
                 style: TextButton.styleFrom(foregroundColor: badColor),
                 onPressed: () => Navigator.pop(c, 'remove'),
-                child: Text(existing.recurring ? 'Stop from ${per.label} on' : 'Remove'),
+                child: Text(existing.recurring ? tr('Stop from {m} on', {'m': per.label}) : tr('Remove')),
               ),
             ],
           ]),
@@ -330,15 +331,16 @@ class PlanCard extends StatelessWidget {
             app.budgetTab.value = 1;
             app.tab.value = 4;
           },
-          child: Text(lines.isEmpty ? 'Set up' : 'All')),
+          child: Text(tr(lines.isEmpty ? 'Set up' : 'All'))),
       child: lines.isEmpty
-          ? Text('Add what must happen each month (rent, fees, savings) and tick it off as you go.',
+          ? T('Add what must happen each month (rent, fees, savings) and tick it off as you go.',
               style: TextStyle(color: cs.onSurfaceVariant))
           : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text(
                 open.isEmpty
-                    ? 'Everything in this month\'s plan is done.'
-                    : '${lines.length - open.length} of ${lines.length} done · ${fmt(left)} ${app.currency} still to go',
+                    ? tr('Everything in this month\'s plan is done.')
+                    : tr('{a} of {b} done · {r} {cur} still to go',
+                        {'a': lines.length - open.length, 'b': lines.length, 'r': fmt(left), 'cur': app.currency}),
                 style: TextStyle(color: open.isEmpty ? goodColor : cs.onSurfaceVariant, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),

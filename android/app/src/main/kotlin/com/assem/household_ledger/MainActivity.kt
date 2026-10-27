@@ -88,6 +88,12 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "setLang" -> {
+                        getSharedPreferences(Reminder.PREFS, Context.MODE_PRIVATE)
+                            .edit().putString("lang", call.argument<String>("lang") ?: "en").apply()
+                        result.success(null)
+                    }
+
                     "setPref" -> {
                         val key = call.argument<String>("key") ?: ""
                         val value = call.argument<Boolean>("value") ?: false

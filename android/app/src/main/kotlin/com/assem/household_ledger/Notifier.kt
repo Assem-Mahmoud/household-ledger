@@ -16,7 +16,7 @@ object Notifier {
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL_ID) == null) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Budget alerts and reminders",
+                if (Reminder.arabic(ctx)) "تنبيهات الميزانية والتذكيرات" else "Budget alerts and reminders",
                 NotificationManager.IMPORTANCE_DEFAULT
             )
             channel.description = "Budget warnings, new bank transactions and the daily reminder"

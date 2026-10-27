@@ -4,6 +4,7 @@ import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 
 import 'format.dart';
+import 'i18n.dart';
 import 'models.dart';
 import 'state.dart';
 
@@ -39,7 +40,7 @@ class PeriodSwitcher extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          tooltip: 'Previous period',
+          tooltip: tr('Previous period'),
           icon: const Icon(Icons.chevron_left),
           onPressed: app.goPrev,
         ),
@@ -48,7 +49,7 @@ class PeriodSwitcher extends StatelessWidget {
           child: Text(per.label, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         ),
         IconButton(
-          tooltip: 'Next period',
+          tooltip: tr('Next period'),
           icon: const Icon(Icons.chevron_right),
           onPressed: per.isCurrent ? null : app.goNext,
         ),
@@ -84,7 +85,7 @@ class SectionCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(children: [
-                Expanded(child: Text(title!, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
+                Expanded(child: Text(tr(title!), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
                 if (trailing != null) trailing!,
               ]),
             ),
@@ -100,7 +101,7 @@ class Eyebrow extends StatelessWidget {
   const Eyebrow(this.text, {super.key});
   @override
   Widget build(BuildContext context) => Text(
-        text.toUpperCase(),
+        tr(text).toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
             letterSpacing: 0.8, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
       );
@@ -115,7 +116,7 @@ class InsightTile extends StatelessWidget {
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
             width: 8, height: 8,
-            margin: const EdgeInsets.only(top: 6, right: 10),
+            margin: const EdgeInsetsDirectional.only(top: 6, end: 10),
             decoration: BoxDecoration(color: levelColor(insight.level, context), shape: BoxShape.circle),
           ),
           Expanded(child: Text(insight.text, style: Theme.of(context).textTheme.bodyMedium)),

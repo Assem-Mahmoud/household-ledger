@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../format.dart';
+import '../i18n.dart';
 import '../periods.dart';
 import '../state.dart';
 import '../stats.dart';
@@ -66,8 +67,9 @@ class AnalyticsScreen extends StatelessWidget {
                   ]),
                   const SizedBox(height: 10),
                   Text(
-                    'Average over ${withData.length} period${withData.length == 1 ? '' : 's'} with data: '
-                    'income ${fmt(avgIncome)}, spending ${fmt(avgSpend)} ${app.currency}.',
+                    trn(withData.length, 'Average over {n} period with data: income {i}, spending {s} {cur}.',
+                        'Average over {n} periods with data: income {i}, spending {s} {cur}.',
+                        {'i': fmt(avgIncome), 's': fmt(avgSpend), 'cur': app.currency}),
                     style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                   ),
                 ]),
@@ -75,14 +77,14 @@ class AnalyticsScreen extends StatelessWidget {
 
               SectionCard(
                 title: 'Daily spending',
-                trailing: Text('avg ${fmt(avgDaily)}/day', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                trailing: Text(tr('avg {a}/day', {'a': fmt(avgDaily)}), style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   DailyChart(daily,
                       dailyBudget: total > 0 ? total / per.days : null,
                       today: per.isCurrent ? per.elapsed - 1 : null),
                   if (total > 0) ...[
                     const SizedBox(height: 6),
-                    Text('Dashed line: daily budget of ${fmt(total / per.days)} ${app.currency}.',
+                    Text(tr('Dashed line: daily budget of {a} {cur}.', {'a': fmt(total / per.days), 'cur': app.currency}),
                         style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5)),
                   ],
                 ]),
@@ -91,7 +93,7 @@ class AnalyticsScreen extends StatelessWidget {
               SectionCard(
                 title: 'Where the money went',
                 child: cats.isEmpty
-                    ? Text('No spending in this period.', style: TextStyle(color: cs.onSurfaceVariant))
+                    ? T('No spending in this period.', style: TextStyle(color: cs.onSurfaceVariant))
                     : Column(children: [
                         for (final e in cats) _catRow(context, e.key, e.value, s.spend, prev.byCat[e.key] ?? 0, s.countByCat[e.key] ?? 0),
                       ]),
@@ -99,9 +101,9 @@ class AnalyticsScreen extends StatelessWidget {
 
               SectionCard(
                 title: 'Needs · Wants · Savings',
-                trailing: Text('target 50 / 30 / 20', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5)),
+                trailing: T('target 50 / 30 / 20', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5)),
                 child: s.income <= 0
-                    ? Text('Log this period\'s income to compare against the 50/30/20 guide.',
+                    ? T('Log this period\'s income to compare against the 50/30/20 guide.',
                         style: TextStyle(color: cs.onSurfaceVariant))
                     : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                         SplitBar([(need, spendColor), (want, warnColor), (saved, cs.primary)]),
@@ -115,7 +117,7 @@ class AnalyticsScreen extends StatelessWidget {
               SectionCard(
                 title: 'Top merchants',
                 child: merchants.isEmpty
-                    ? Text('No merchant data yet.', style: TextStyle(color: cs.onSurfaceVariant))
+                    ? T('No merchant data yet.', style: TextStyle(color: cs.onSurfaceVariant))
                     : Column(children: [
                         for (final m in merchants)
                           ListTile(
@@ -123,7 +125,7 @@ class AnalyticsScreen extends StatelessWidget {
                             contentPadding: EdgeInsets.zero,
                             leading: CategoryDot(app.cat(m.categoryId)?.color ?? 0xFF888888, size: 12),
                             title: Text(m.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text('${m.count} purchase${m.count == 1 ? '' : 's'} · avg ${fmt(m.total / m.count)}'),
+                            subtitle: Text(trn(m.count, '{n} purchase · avg {a}', '{n} purchases · avg {a}', {'a': fmt(m.total / m.count)})),
                             trailing: Text(fmt(m.total), style: const TextStyle(fontFeatures: tabular, fontWeight: FontWeight.w600)),
                           ),
                       ]),
@@ -138,7 +140,7 @@ class AnalyticsScreen extends StatelessWidget {
   Widget _legend(BuildContext context, Color c, String label) => Row(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3))),
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(tr(label), style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ]);
 
   Widget _catRow(BuildContext context, int catId, double v, double total, double prevV, int count) {
@@ -152,7 +154,7 @@ class AnalyticsScreen extends StatelessWidget {
       delta = '${d >= 0 ? '▲' : '▼'} ${(d.abs() * 100).round()}%';
       deltaColor = d > 0.1 ? badColor : d < -0.05 ? goodColor : cs.onSurfaceVariant;
     } else if (v > 0) {
-      delta = 'new';
+      delta = tr('new');
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -160,11 +162,11 @@ class AnalyticsScreen extends StatelessWidget {
         Row(children: [
           CategoryDot(c?.color ?? 0xFF888888),
           const SizedBox(width: 8),
-          Expanded(child: Text('${c?.name ?? 'Other'}  ', maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Expanded(child: Text('${c?.display ?? tr('Other')}  ', maxLines: 1, overflow: TextOverflow.ellipsis)),
           Text(fmt(v), style: const TextStyle(fontFeatures: tabular, fontWeight: FontWeight.w600)),
           SizedBox(
             width: 64,
-            child: Text(delta, textAlign: TextAlign.right, style: TextStyle(color: deltaColor, fontSize: 12.5)),
+            child: Text(delta, textAlign: TextAlign.end, style: TextStyle(color: deltaColor, fontSize: 12.5)),
           ),
         ]),
         const SizedBox(height: 5),
@@ -178,7 +180,7 @@ class AnalyticsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
-        Text('${(share * 100).round()}% of spending · $count entr${count == 1 ? 'y' : 'ies'}',
+        Text(trn(count, '{p}% of spending · {n} entry', '{p}% of spending · {n} entries', {'p': (share * 100).round()}),
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
       ]),
     );
@@ -189,12 +191,12 @@ class AnalyticsScreen extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(children: [
-        Expanded(child: Text(label)),
+        Expanded(child: Text(tr(label))),
         Text('${(actual * 100).round()}%',
             style: TextStyle(fontWeight: FontWeight.w700, color: ok ? goodColor : badColor, fontFeatures: tabular)),
         SizedBox(
           width: 72,
-          child: Text('of ${(target * 100).round()}%', textAlign: TextAlign.right,
+          child: Text(tr('of {p}%', {'p': (target * 100).round()}), textAlign: TextAlign.end,
               style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5)),
         ),
       ]),

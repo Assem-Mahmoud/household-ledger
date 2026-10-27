@@ -13,6 +13,12 @@ import java.util.Calendar
 object Reminder {
     const val PREFS = "ledger"
 
+    /** True when the app is set to Arabic (falls back to the phone language). */
+    fun arabic(ctx: Context): Boolean {
+        val l = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("lang", null)
+        return (l ?: java.util.Locale.getDefault().language) == "ar"
+    }
+
     fun save(ctx: Context, hour: Int, minute: Int, on: Boolean) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt("remH", hour).putInt("remM", minute).putBoolean("remOn", on).apply()
@@ -55,10 +61,12 @@ object Reminder {
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        val ar = Reminder.arabic(ctx)
         Notifier.show(
             ctx, 1001,
-            "Log today's spending",
-            "Add any cash spending and confirm today's bank transactions."
+            if (ar) "سجّل مصروفات اليوم" else "Log today's spending",
+            if (ar) "أضف أي مصروفات نقدية وأكّد العمليات البنكية لهذا اليوم."
+            else "Add any cash spending and confirm today's bank transactions."
         )
         Reminder.schedule(ctx)
     }
@@ -89,11 +97,13 @@ class SmsReceiver : BroadcastReceiver() {
         if (!currency.containsMatchIn(body) || !amount.containsMatchIn(body)) return
 
         val sender = parts[0].originatingAddress ?: "Bank"
+        val ar = Reminder.arabic(ctx)
         Notifier.show(
             ctx,
             2000 + (System.currentTimeMillis() % 1000).toInt(),
-            "New transaction to review",
-            "From $sender. Tap to confirm the amount and pick a category."
+            if (ar) "عملية جديدة للمراجعة" else "New transaction to review",
+            if (ar) "من $sender. اضغط لتأكيد المبلغ واختيار الفئة."
+            else "From $sender. Tap to confirm the amount and pick a category."
         )
     }
 }

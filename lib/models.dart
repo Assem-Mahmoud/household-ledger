@@ -1,5 +1,7 @@
 /// Plain data classes stored in SQLite.
 
+import 'i18n.dart';
+
 class Category {
   int id;
   String name;
@@ -20,6 +22,9 @@ class Category {
     this.sort = 0,
     this.archived = false,
   });
+
+  /// Name shown on screen (built-in names are translated; user names are kept).
+  String get display => tr(name);
 
   bool get isExpense => kind == 'expense';
   bool get isSaving => grp == 'save';

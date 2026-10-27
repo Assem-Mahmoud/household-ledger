@@ -1,3 +1,5 @@
+import 'i18n.dart';
+
 String fmt(double v, {int decimals = 0}) {
   final neg = v < 0;
   final fixed = v.abs().toStringAsFixed(decimals);
@@ -9,7 +11,7 @@ String fmt(double v, {int decimals = 0}) {
     buf.write(intPart[i]);
   }
   final dec = parts.length > 1 ? '.${parts[1]}' : '';
-  return '${neg ? '−' : ''}$buf$dec';
+  return neg ? ltr('−$buf$dec') : '$buf$dec';
 }
 
 /// Shows decimals only when the value has them.

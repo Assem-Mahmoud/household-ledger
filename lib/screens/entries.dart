@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Category;
 
 import '../format.dart';
+import '../i18n.dart';
 import '../models.dart';
 import '../periods.dart';
 import '../state.dart';
@@ -31,7 +32,7 @@ class _EntriesScreenState extends State<EntriesScreen> {
           if (kindFilter != 'all' && t.kind != kindFilter) return false;
           if (categoryFilter != null && t.categoryId != categoryFilter) return false;
           if (q.isEmpty) return true;
-          final c = app.cat(t.categoryId)?.name.toLowerCase() ?? '';
+          final c = '${app.cat(t.categoryId)?.name.toLowerCase() ?? ''} ${app.cat(t.categoryId)?.display.toLowerCase() ?? ''}';
           return t.merchant.toLowerCase().contains(q) || t.note.toLowerCase().contains(q) || c.contains(q) ||
               fmtAuto(t.amount).replaceAll(',', '').contains(q);
         }).toList();
@@ -47,9 +48,9 @@ class _EntriesScreenState extends State<EntriesScreen> {
             rows.add(Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
               child: Row(children: [
-                Expanded(child: Eyebrow('${const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday - 1]} ${shortDate(d)}')),
+                Expanded(child: Eyebrow('${weekdayShort(d)} ${shortDate(d)}')),
                 if (dayTotal > 0)
-                  Text('−${fmtAuto(dayTotal)}', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12, fontFeatures: tabular)),
+                  Text(ltr('−${fmtAuto(dayTotal)}'), style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12, fontFeatures: tabular)),
               ]),
             ));
           }
@@ -59,7 +60,7 @@ class _EntriesScreenState extends State<EntriesScreen> {
         return Scaffold(
           appBar: AppBar(title: const PeriodSwitcher(), centerTitle: true),
           floatingActionButton: FloatingActionButton(
-            tooltip: 'Add entry',
+            tooltip: tr('Add entry'),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EntryForm())),
             child: const Icon(Icons.add),
           ),
@@ -69,7 +70,7 @@ class _EntriesScreenState extends State<EntriesScreen> {
               child: TextField(
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: 'Search merchant, note, category or amount',
+                  hintText: tr('Search merchant, note, category or amount'),
                   prefixIcon: const Icon(Icons.search),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -82,15 +83,15 @@ class _EntriesScreenState extends State<EntriesScreen> {
               child: Row(children: [
                 for (final k in const [('all', 'All'), ('expense', 'Expenses'), ('income', 'Income')])
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsetsDirectional.only(end: 8),
                     child: ChoiceChip(
-                      label: Text(k.$2),
+                      label: Text(tr(k.$2)),
                       selected: kindFilter == k.$1,
                       onSelected: (_) => setState(() => kindFilter = k.$1),
                     ),
                   ),
                 InputChip(
-                  label: Text(categoryFilter == null ? 'Any category' : app.cat(categoryFilter!)?.name ?? 'Category'),
+                  label: Text(categoryFilter == null ? tr('Any category') : app.cat(categoryFilter!)?.display ?? tr('Category')),
                   avatar: const Icon(Icons.filter_list, size: 18),
                   onDeleted: categoryFilter == null ? null : () => setState(() => categoryFilter = null),
                   onPressed: () async {
@@ -104,8 +105,8 @@ class _EntriesScreenState extends State<EntriesScreen> {
                             for (final cat in app.categories.where((x) => !x.archived))
                               ListTile(
                                 leading: CategoryDot(cat.color, size: 12),
-                                title: Text(cat.name),
-                                trailing: Text(cat.kind == 'income' ? 'Income' : ''),
+                                title: Text(cat.display),
+                                trailing: Text(cat.kind == 'income' ? tr('Income') : ''),
                                 onTap: () => Navigator.pop(c, cat.id),
                               ),
                           ]),
@@ -120,9 +121,9 @@ class _EntriesScreenState extends State<EntriesScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Row(children: [
-                Text('${list.length} entr${list.length == 1 ? 'y' : 'ies'}', style: TextStyle(color: cs.onSurfaceVariant)),
+                Text(trn(list.length, '{n} entry', '{n} entries'), style: TextStyle(color: cs.onSurfaceVariant)),
                 const Spacer(),
-                Text('Net ${fmt(total)} ${app.currency}', style: TextStyle(color: cs.onSurfaceVariant, fontFeatures: tabular)),
+                Text(tr('Net {a} {cur}', {'a': fmt(total), 'cur': app.currency}), style: TextStyle(color: cs.onSurfaceVariant, fontFeatures: tabular)),
               ]),
             ),
             Expanded(
@@ -132,8 +133,8 @@ class _EntriesScreenState extends State<EntriesScreen> {
                         padding: const EdgeInsets.all(32),
                         child: Text(
                           s.list.isEmpty
-                              ? 'No entries in ${app.period.label}. Tap + to add one, or confirm SMS in Review.'
-                              : 'No entries match these filters.',
+                              ? tr('No entries in {m}. Tap + to add one, or confirm SMS in Review.', {'m': app.period.label})
+                              : tr('No entries match these filters.'),
                           textAlign: TextAlign.center,
                           style: TextStyle(color: cs.onSurfaceVariant),
                         ),
@@ -150,7 +151,7 @@ class _EntriesScreenState extends State<EntriesScreen> {
   Widget _tile(BuildContext context, Txn t) {
     final cs = Theme.of(context).colorScheme;
     final c = app.cat(t.categoryId);
-    final title = t.label.isEmpty ? (c?.name ?? '') : t.label;
+    final title = t.label.isEmpty ? (c?.display ?? '') : t.label;
     return ListTile(
       leading: CircleAvatar(
         radius: 18,
@@ -158,9 +159,9 @@ class _EntriesScreenState extends State<EntriesScreen> {
         child: Icon(t.source == 'sms' ? Icons.sms_outlined : Icons.edit_note, size: 18, color: Color(c?.color ?? 0xFF888888)),
       ),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text([c?.name ?? '', if (t.note.isNotEmpty && t.merchant.isNotEmpty) t.note].join(' · '),
+      subtitle: Text([c?.display ?? '', if (t.note.isNotEmpty && t.merchant.isNotEmpty) t.note].join(' · '),
           maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Text('${t.kind == 'income' ? '+' : '−'}${fmtAuto(t.amount)}',
+      trailing: Text(ltr('${t.kind == 'income' ? '+' : '−'}${fmtAuto(t.amount)}'),
           style: TextStyle(fontFeatures: tabular, fontWeight: FontWeight.w600, fontSize: 15,
               color: t.kind == 'income' ? cs.primary : null)),
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => EntryForm(existing: t))),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Category;
 
 import '../format.dart';
+import '../i18n.dart';
 import '../models.dart';
 import '../state.dart';
 import '../stats.dart';
@@ -44,8 +45,8 @@ class _BudgetScreenState extends State<BudgetScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Budget & plan'),
-        bottom: TabBar(controller: _tabs, tabs: const [Tab(text: 'This period'), Tab(text: 'Plan'), Tab(text: 'Template')]),
+        title: const T('Budget & plan'),
+        bottom: TabBar(controller: _tabs, tabs: [Tab(text: tr('This period')), Tab(text: tr('Plan')), Tab(text: tr('Template'))]),
       ),
       body: TabBarView(controller: _tabs, children: const [_MonthTab(), PlanTab(), _TemplateTab()]),
     );
@@ -63,12 +64,13 @@ Future<void> _editAmount(BuildContext context, Category c, {required bool fromTe
     builder: (c2) => Padding(
       padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(c2).viewInsets.bottom + 20),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text(c.name, style: Theme.of(c2).textTheme.titleLarge),
+        Text(c.display, style: Theme.of(c2).textTheme.titleLarge),
         const SizedBox(height: 4),
         Text(
           fromTemplate
-              ? 'Default for every period. Periods you changed individually keep their own value.'
-              : 'Template value: ${fmt(c.budget)} ${app.currency}${overridden ? ' · this period currently differs' : ''}',
+              ? tr('Default for every period. Periods you changed individually keep their own value.')
+              : tr(overridden ? 'Template value: {a} {cur} · this period currently differs' : 'Template value: {a} {cur}',
+                  {'a': fmt(c.budget), 'cur': app.currency}),
           style: TextStyle(color: Theme.of(c2).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 16),
@@ -77,18 +79,18 @@ Future<void> _editAmount(BuildContext context, Category c, {required bool fromTe
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           style: const TextStyle(fontSize: 22, fontFeatures: tabular),
-          decoration: InputDecoration(labelText: 'Monthly amount', suffixText: app.currency, border: const OutlineInputBorder()),
+          decoration: InputDecoration(labelText: tr('Monthly amount'), suffixText: app.currency, border: const OutlineInputBorder()),
         ),
         const SizedBox(height: 16),
         if (fromTemplate)
-          FilledButton(onPressed: () => Navigator.pop(c2, 'template'), child: const Text('Save template'))
+          FilledButton(onPressed: () => Navigator.pop(c2, 'template'), child: const T('Save template'))
         else ...[
-          FilledButton(onPressed: () => Navigator.pop(c2, 'month'), child: Text('Save for ${per.label} only')),
+          FilledButton(onPressed: () => Navigator.pop(c2, 'month'), child: Text(tr('Save for {m} only', {'m': per.label}))),
           const SizedBox(height: 8),
-          OutlinedButton(onPressed: () => Navigator.pop(c2, 'template'), child: const Text('Save to template (all periods)')),
+          OutlinedButton(onPressed: () => Navigator.pop(c2, 'template'), child: const T('Save to template (all periods)')),
           if (overridden) ...[
             const SizedBox(height: 8),
-            TextButton(onPressed: () => Navigator.pop(c2, 'reset'), child: const Text('Reset to template value')),
+            TextButton(onPressed: () => Navigator.pop(c2, 'reset'), child: const T('Reset to template value')),
           ],
         ],
       ]),
@@ -131,7 +133,7 @@ class _MonthTab extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 6, 20, 4),
-            child: Text('Tap a category to change it for this period only or update the template.',
+            child: T('Tap a category to change it for this period only or update the template.',
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
           ),
           for (final c in [...app.spendingCategories, ...saveCats]) _row(context, c, s.byCat[c.id] ?? (c.isSaving ? _saved(s, c.id) : 0)),
@@ -165,10 +167,10 @@ class _MonthTab extends StatelessWidget {
           Row(children: [
             CategoryDot(c.color),
             const SizedBox(width: 8),
-            Flexible(child: Text(c.isSaving ? '${c.name} (target)' : c.name, overflow: TextOverflow.ellipsis)),
-            if (custom) ...[const SizedBox(width: 6), Pill('this period', cs.primary)],
+            Flexible(child: Text(c.isSaving ? tr('{cat} (target)', {'cat': c.display}) : c.display, overflow: TextOverflow.ellipsis)),
+            if (custom) ...[const SizedBox(width: 6), Pill(tr('this period'), cs.primary)],
             const Spacer(),
-            Text(b > 0 ? '${fmt(spent)} / ${fmt(b)}' : '${fmt(spent)} · no budget',
+            Text(b > 0 ? '${fmt(spent)} / ${fmt(b)}' : tr('{a} · no budget', {'a': fmt(spent)}),
                 style: TextStyle(
                     fontFeatures: tabular,
                     fontSize: 13.5,
@@ -191,7 +193,7 @@ class _TemplateTab extends StatelessWidget {
     final avg = averages(app.period, n: 3);
     if (avg.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Need at least one earlier period with entries to suggest amounts.')));
+          const SnackBar(content: T('Need at least one earlier period with entries to suggest amounts.')));
       return;
     }
     final values = <int, double>{};
@@ -202,12 +204,12 @@ class _TemplateTab extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Fill template from your history?'),
-        content: Text('Sets ${values.length} categories to their average over the last 3 periods, rounded up. '
-            'Categories with no history keep their current value.'),
+        title: const T('Fill template from your history?'),
+        content: Text(tr('Sets {n} categories to their average over the last 3 periods, rounded up. '
+            'Categories with no history keep their current value.', {'n': values.length})),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Apply')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Apply')),
         ],
       ),
     );
@@ -233,14 +235,14 @@ class _TemplateTab extends StatelessWidget {
             trailing: TextButton.icon(
               onPressed: () => _suggest(context),
               icon: const Icon(Icons.auto_graph, size: 18),
-              label: const Text('Suggest'),
+              label: const T('Suggest'),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               InkWell(
                 onTap: () => _editIncome(context),
                 child: Row(children: [
-                  const Expanded(child: Text('Expected monthly income')),
-                  Text(income > 0 ? money(income) : 'Set',
+                  const Expanded(child: T('Expected monthly income')),
+                  Text(income > 0 ? money(income) : tr('Set'),
                       style: TextStyle(fontWeight: FontWeight.w600, color: cs.primary, fontFeatures: tabular)),
                   const Icon(Icons.edit, size: 16),
                 ]),
@@ -256,8 +258,11 @@ class _TemplateTab extends StatelessWidget {
                 SplitBar([(need, spendColor), (want, warnColor), (saveTotal + (unplanned > 0 ? unplanned : 0), cs.primary)]),
                 const SizedBox(height: 6),
                 Text(
-                  'Needs ${(need / income * 100).round()}% · Wants ${(want / income * 100).round()}% · '
-                  'Savings ${((saveTotal + (unplanned > 0 ? unplanned : 0)) / income * 100).round()}%   (guide 50 / 30 / 20)',
+                  tr('Needs {a}% · Wants {b}% · Savings {c}%   (guide 50 / 30 / 20)', {
+                    'a': (need / income * 100).round(),
+                    'b': (want / income * 100).round(),
+                    'c': ((saveTotal + (unplanned > 0 ? unplanned : 0)) / income * 100).round(),
+                  }),
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5),
                 ),
               ],
@@ -265,7 +270,7 @@ class _TemplateTab extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-            child: Text('Every period starts from these amounts. Change a single period from the "This period" tab.',
+            child: T('Every period starts from these amounts. Change a single period from the "This period" tab.',
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
           ),
           for (final g in const [('need', 'Needs'), ('want', 'Wants'), ('save', 'Savings')]) ...[
@@ -274,7 +279,7 @@ class _TemplateTab extends StatelessWidget {
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                 leading: CategoryDot(c.color, size: 12),
-                title: Text(c.name),
+                title: Text(c.display),
                 trailing: Text(c.budget > 0 ? fmt(c.budget) : '—',
                     style: const TextStyle(fontFeatures: tabular, fontWeight: FontWeight.w600)),
                 onTap: () => _editAmount(context, c, fromTemplate: true),
@@ -288,7 +293,7 @@ class _TemplateTab extends StatelessWidget {
   Widget _line(BuildContext context, String label, double v, {Color? color}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(children: [
-          Expanded(child: Text(label)),
+          Expanded(child: Text(tr(label))),
           Text(money(v), style: TextStyle(fontFeatures: tabular, color: color)),
         ]),
       );
@@ -298,16 +303,16 @@ class _TemplateTab extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Expected monthly income'),
+        title: const T('Expected monthly income'),
         content: TextField(
           controller: ctl,
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(suffixText: app.currency, helperText: 'Salary plus allowances, used for planning only'),
+          decoration: InputDecoration(suffixText: app.currency, helperText: tr('Salary plus allowances, used for planning only')),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Save')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Save')),
         ],
       ),
     );

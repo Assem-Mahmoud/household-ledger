@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' hide Category;
 import 'package:flutter/services.dart';
 
 import '../defaults.dart';
+import '../i18n.dart';
 import '../models.dart';
 import '../native.dart';
 import '../periods.dart';
@@ -21,14 +22,34 @@ class SettingsScreen extends StatelessWidget {
         final h = int.tryParse(app.settings['reminderH'] ?? '21') ?? 21;
         final m = int.tryParse(app.settings['reminderM'] ?? '0') ?? 0;
         return Scaffold(
-          appBar: AppBar(title: const Text('Settings')),
+          appBar: AppBar(title: const T('Settings')),
           body: ListView(padding: const EdgeInsets.only(bottom: 32), children: [
+            _header(context, 'Language'),
+            ListTile(
+              leading: const Icon(Icons.translate),
+              title: const T('App language'),
+              trailing: DropdownButton<String>(
+                value: app.language.value,
+                items: [
+                  DropdownMenuItem(value: 'system', child: T('Phone language')),
+                  const DropdownMenuItem(value: 'en', child: Text('English')),
+                  const DropdownMenuItem(value: 'ar', child: Text('العربية')),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                  app.setLanguagePref(v);
+                },
+              ),
+            ),
+
             _header(context, 'Month'),
             ListTile(
-              title: const Text('Period starts on day'),
+              title: const T('Period starts on day'),
               subtitle: Text(app.cycleStartDay == 1
-                  ? 'Calendar months'
-                  : 'Day ${app.cycleStartDay} to day ${app.cycleStartDay - 1} of the next month (salary to salary)'),
+                  ? tr('Calendar months')
+                  : tr('Day {a} to day {b} of the next month (salary to salary)',
+                      {'a': app.cycleStartDay, 'b': app.cycleStartDay - 1})),
               trailing: DropdownButton<int>(
                 value: app.cycleStartDay,
                 items: [for (var d = 1; d <= 28; d++) DropdownMenuItem(value: d, child: Text('$d'))],
@@ -36,14 +57,14 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
             ListTile(
-              title: const Text('Currency label'),
+              title: const T('Currency label'),
               trailing: Text(app.currency, style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
               onTap: () => _editText(context, 'Currency label', 'currency'),
             ),
 
             _header(context, 'Alerts'),
             ListTile(
-              title: const Text('Warn when a budget reaches'),
+              title: const T('Warn when a budget reaches'),
               subtitle: Slider(
                 value: app.alertPct.toDouble(),
                 min: 50,
@@ -55,8 +76,8 @@ class SettingsScreen extends StatelessWidget {
               trailing: Text('${app.alertPct}%', style: const TextStyle(fontWeight: FontWeight.w600)),
             ),
             SwitchListTile(
-              title: const Text('Daily reminder'),
-              subtitle: Text('Log cash spending and confirm SMS at ${two(h)}:${two(m)}'),
+              title: const T('Daily reminder'),
+              subtitle: Text(tr('Log cash spending and confirm SMS at {t}', {'t': '${two(h)}:${two(m)}'})),
               value: app.flag('reminderOn'),
               onChanged: (v) async {
                 await app.setSetting('reminderOn', v ? '1' : '0');
@@ -65,7 +86,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             ListTile(
               enabled: app.flag('reminderOn'),
-              title: const Text('Reminder time'),
+              title: const T('Reminder time'),
               trailing: Text('${two(h)}:${two(m)}', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
               onTap: () async {
                 final t = await showTimePicker(context: context, initialTime: TimeOfDay(hour: h, minute: m));
@@ -78,8 +99,8 @@ class SettingsScreen extends StatelessWidget {
 
             _header(context, 'Bank SMS'),
             SwitchListTile(
-              title: const Text('Import transactions from SMS'),
-              subtitle: const Text('Reads bank messages on this phone. Nothing leaves the device.'),
+              title: const T('Import transactions from SMS'),
+              subtitle: const T('Reads bank messages on this phone. Nothing leaves the device.'),
               value: app.flag('smsOn'),
               onChanged: (v) async {
                 await app.setSetting('smsOn', v ? '1' : '0');
@@ -88,7 +109,7 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             SwitchListTile(
-              title: const Text('Notify when a bank SMS arrives'),
+              title: const T('Notify when a bank SMS arrives'),
               value: app.flag('smsAlerts'),
               onChanged: app.flag('smsOn')
                   ? (v) async {
@@ -98,103 +119,104 @@ class SettingsScreen extends StatelessWidget {
                   : null,
             ),
             ListTile(
-              title: const Text('SMS start date'),
+              title: const T('SMS start date'),
               subtitle: Text(app.smsStartDate == null
-                  ? 'Off · every message can be read'
-                  : 'Only messages from ${shortDate(app.smsStartDate!)} ${app.smsStartDate!.year} on. Earlier days come from imported statements.'),
+                  ? tr('Off · every message can be read')
+                  : tr('Only messages from {d} on. Earlier days come from imported statements.',
+                      {'d': '${shortDate(app.smsStartDate!)} ${app.smsStartDate!.year}'})),
               trailing: const Icon(Icons.start),
               onTap: () => _smsStart(context),
             ),
             ListTile(
-              title: const Text('Scan a date range'),
-              subtitle: const Text('Read messages between two dates. Already reviewed ones are skipped.'),
+              title: const T('Scan a date range'),
+              subtitle: const T('Read messages between two dates. Already reviewed ones are skipped.'),
               trailing: const Icon(Icons.date_range),
               onTap: () => scanRange(context),
             ),
             ListTile(
-              title: const Text('Bank senders'),
+              title: const T('Bank senders'),
               subtitle: Text(app.lines('senders').isEmpty
-                  ? 'Automatic: any SMS that looks like a transaction'
-                  : 'Only: ${app.lines('senders').join(', ')}'),
+                  ? tr('Automatic: any SMS that looks like a transaction')
+                  : tr('Only: {list}', {'list': app.lines('senders').join(', ')})),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SendersScreen())),
             ),
             ListTile(
-              title: const Text('Ignored senders'),
-              subtitle: Text(app.lines('blockedSenders').isEmpty ? 'None' : app.lines('blockedSenders').join(', ')),
+              title: const T('Ignored senders'),
+              subtitle: Text(app.lines('blockedSenders').isEmpty ? tr('None') : app.lines('blockedSenders').join(', ')),
               onTap: () => _editText(context, 'Ignored senders', 'blockedSenders', multiline: true),
             ),
             ListTile(
-              title: const Text('Ignore messages containing'),
-              subtitle: Text('${app.lines('ignoreKw').length} keywords (OTP, declined, reminders…)'),
+              title: const T('Ignore messages containing'),
+              subtitle: Text(tr('{n} keywords (OTP, declined, reminders…)', {'n': app.lines('ignoreKw').length})),
               onTap: () => _editText(context, 'Ignore keywords', 'ignoreKw', multiline: true,
                   help: 'One per line. Messages containing any of these are skipped.',
                   resetTo: defaultIgnoreKeywords.join('\n')),
             ),
             ListTile(
-              title: const Text('Treat as income when containing'),
-              subtitle: Text('${app.lines('incomeKw').length} keywords (salary, deposit, refund…)'),
+              title: const T('Treat as income when containing'),
+              subtitle: Text(tr('{n} keywords (salary, deposit, refund…)', {'n': app.lines('incomeKw').length})),
               onTap: () => _editText(context, 'Income keywords', 'incomeKw', multiline: true,
                   help: 'One per line. Everything else is treated as an expense.',
                   resetTo: defaultIncomeKeywords.join('\n')),
             ),
             ListTile(
-              title: const Text('Test the SMS reader'),
-              subtitle: const Text('Paste a bank message to see what the app extracts'),
+              title: const T('Test the SMS reader'),
+              subtitle: const T('Paste a bank message to see what the app extracts'),
               trailing: const Icon(Icons.science_outlined),
               onTap: () => _testParser(context),
             ),
 
             _header(context, 'Categories'),
             ListTile(
-              title: const Text('Manage categories'),
-              subtitle: Text('${app.categories.where((c) => !c.archived).length} active'),
+              title: const T('Manage categories'),
+              subtitle: Text(tr('{n} active', {'n': app.categories.where((c) => !c.archived).length})),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())),
             ),
             ListTile(
-              title: const Text('Auto-category rules'),
-              subtitle: Text('${app.rules.length} merchant keywords'),
+              title: const T('Auto-category rules'),
+              subtitle: Text(tr('{n} merchant keywords', {'n': app.rules.length})),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RulesScreen())),
             ),
 
             _header(context, 'Backup to Gmail'),
             ListTile(
-              title: const Text('Backup email'),
+              title: const T('Backup email'),
               subtitle: Text((app.settings['backupEmail'] ?? '').isEmpty
-                  ? 'Not set — Gmail opens with an empty "To"'
+                  ? tr('Not set — Gmail opens with an empty "To"')
                   : app.settings['backupEmail']!),
               trailing: const Icon(Icons.alternate_email),
               onTap: () => _editText(context, 'Backup email', 'backupEmail',
                   help: 'Backups are emailed here, usually your own Gmail address.'),
             ),
             ListTile(
-              title: const Text('Email a backup now'),
+              title: const T('Email a backup now'),
               subtitle: Text(app.daysSinceBackup == null
-                  ? 'Never backed up'
+                  ? tr('Never backed up')
                   : app.daysSinceBackup == 0
-                      ? 'Last backup: today'
-                      : 'Last backup: ${app.daysSinceBackup} day${app.daysSinceBackup == 1 ? '' : 's'} ago'),
+                      ? tr('Last backup: today')
+                      : trn(app.daysSinceBackup!, 'Last backup: {n} day ago', 'Last backup: {n} days ago')),
               trailing: Icon(Icons.backup_outlined, color: app.backupDue ? warnColor : null),
               onTap: () => emailBackupFlow(context),
             ),
             ListTile(
-              title: const Text('Restore from backup'),
-              subtitle: const Text('Pick a backup file saved from Gmail, Downloads or Drive'),
+              title: const T('Restore from backup'),
+              subtitle: const T('Pick a backup file saved from Gmail, Downloads or Drive'),
               trailing: const Icon(Icons.settings_backup_restore),
               onTap: () => _restore(context),
             ),
 
             _header(context, 'Data'),
             ListTile(
-              title: const Text('Import entries from a CSV file'),
-              subtitle: const Text('Statements or the web ledger export. Entries already in the app are skipped.'),
+              title: const T('Import entries from a CSV file'),
+              subtitle: const T('Statements or the web ledger export. Entries already in the app are skipped.'),
               trailing: const Icon(Icons.upload_file),
               onTap: () => _importFile(context),
             ),
             ListTile(
-              title: const Text('Email entries as CSV'),
-              subtitle: Text('${app.txns.length} entries · opens in Excel or Google Sheets'),
+              title: const T('Email entries as CSV'),
+              subtitle: Text(tr('{n} entries · opens in Excel or Google Sheets', {'n': app.txns.length})),
               trailing: const Icon(Icons.table_view_outlined),
               onTap: () async {
                 try {
@@ -202,36 +224,36 @@ class SettingsScreen extends StatelessWidget {
                     content: app.exportCsv(),
                     fileName: 'household-ledger-${isoDate(DateTime.now())}.csv',
                     to: app.settings['backupEmail'] ?? '',
-                    subject: 'Household Ledger entries ${isoDate(DateTime.now())}',
-                    body: 'All entries as CSV.',
+                    subject: tr('Household Ledger entries {d}', {'d': isoDate(DateTime.now())}),
+                    body: tr('All entries as CSV.'),
                   );
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open email: $e')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not open email: {e}', {'e': e}))));
                   }
                 }
               },
             ),
             ListTile(
-              title: const Text('Copy all entries as CSV'),
-              subtitle: Text('${app.txns.length} entries · paste into Excel or Google Sheets'),
+              title: const T('Copy all entries as CSV'),
+              subtitle: Text(tr('{n} entries · paste into Excel or Google Sheets', {'n': app.txns.length})),
               trailing: const Icon(Icons.copy),
               onTap: () async {
                 await Clipboard.setData(ClipboardData(text: app.exportCsv()));
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV copied to clipboard.')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: T('CSV copied to clipboard.')));
                 }
               },
             ),
             ListTile(
-              title: const Text('Paste CSV rows'),
-              subtitle: const Text('Header: date,type,category,amount,note'),
+              title: const T('Paste CSV rows'),
+              subtitle: const T('Header: date,type,category,amount,note'),
               trailing: const Icon(Icons.content_paste),
               onTap: () => _import(context),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Text(
+              child: T(
                   'Data is stored only on this phone. Uninstalling the app deletes it, so keep a recent backup in Gmail.',
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5)),
             ),
@@ -243,7 +265,7 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _header(BuildContext context, String text) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
-        child: Text(text, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+        child: Text(tr(text), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
       );
 
   Future<void> _editText(BuildContext context, String title, String key,
@@ -252,7 +274,7 @@ class SettingsScreen extends StatelessWidget {
     final result = await showDialog<String>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text(title),
+        title: Text(tr(title)),
         content: SizedBox(
           width: 400,
           child: TextField(
@@ -260,13 +282,13 @@ class SettingsScreen extends StatelessWidget {
             autofocus: true,
             minLines: multiline ? 5 : 1,
             maxLines: multiline ? 12 : 1,
-            decoration: InputDecoration(helperText: help, helperMaxLines: 3, border: const OutlineInputBorder()),
+            decoration: InputDecoration(helperText: help == null ? null : tr(help), helperMaxLines: 3, border: const OutlineInputBorder()),
           ),
         ),
         actions: [
-          if (resetTo != null) TextButton(onPressed: () => ctl.text = resetTo, child: const Text('Defaults')),
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, ctl.text), child: const Text('Save')),
+          if (resetTo != null) TextButton(onPressed: () => ctl.text = resetTo, child: const T('Defaults')),
+          TextButton(onPressed: () => Navigator.pop(c), child: const T('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, ctl.text), child: const T('Save')),
         ],
       ),
     );
@@ -284,7 +306,7 @@ class SettingsScreen extends StatelessWidget {
         final parsed = text.trim().isEmpty ? null : parseSms(text, ignore: app.lines('ignoreKw'), income: app.lines('incomeKw'));
         final catId = parsed == null ? null : app.suggestCategory(parsed.merchant, text, parsed.kind);
         return AlertDialog(
-          title: const Text('Test the SMS reader'),
+          title: const T('Test the SMS reader'),
           content: SizedBox(
             width: 400,
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -292,23 +314,25 @@ class SettingsScreen extends StatelessWidget {
                 controller: ctl,
                 minLines: 4,
                 maxLines: 8,
-                decoration: const InputDecoration(hintText: 'Paste a bank SMS here', border: OutlineInputBorder()),
+                decoration: InputDecoration(hintText: tr('Paste a bank SMS here'), border: const OutlineInputBorder()),
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 12),
               if (text.trim().isNotEmpty)
                 parsed == null
-                    ? const Text('Not recognised as a transaction (no amount found, or it matched an ignore keyword).',
+                    ? const T('Not recognised as a transaction (no amount found, or it matched an ignore keyword).',
                         style: TextStyle(color: badColor))
                     : Text(
-                        'Amount: ${parsed.amount} ${app.currency}\n'
-                        'Type: ${parsed.kind}\n'
-                        'Merchant: ${parsed.merchant.isEmpty ? '(not found)' : parsed.merchant}\n'
-                        'Category: ${catId == null ? '(you pick)' : app.cat(catId)!.name}',
+                        tr('Amount: {a}\nType: {t}\nMerchant: {m}\nCategory: {c}', {
+                          'a': '${parsed.amount} ${app.currency}',
+                          't': tr(parsed.kind == 'income' ? 'Income' : 'Expense'),
+                          'm': parsed.merchant.isEmpty ? tr('(not found)') : parsed.merchant,
+                          'c': catId == null ? tr('(you pick)') : app.cat(catId)!.display,
+                        }),
                       ),
             ]),
           ),
-          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const T('Close'))],
         );
       }),
     );
@@ -320,25 +344,25 @@ class SettingsScreen extends StatelessWidget {
       builder: (c) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const ListTile(
-            title: Text('Start fresh with SMS', style: TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text('Messages before the start date are ignored and cleared from Review. '
+            title: T('Start fresh with SMS', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: T('Messages before the start date are ignored and cleared from Review. '
                 'Use it when statements (CSV) already cover the past, so nothing is counted twice.'),
           ),
           ListTile(
             leading: const Icon(Icons.today),
-            title: const Text('Start from today'),
+            title: const T('Start from today'),
             onTap: () => Navigator.pop(c, 'today'),
           ),
           ListTile(
             leading: const Icon(Icons.event),
-            title: const Text('Pick a start date'),
-            subtitle: const Text('e.g. the day after your last imported statement'),
+            title: const T('Pick a start date'),
+            subtitle: const T('e.g. the day after your last imported statement'),
             onTap: () => Navigator.pop(c, 'pick'),
           ),
           if (app.smsStartDate != null)
             ListTile(
               leading: const Icon(Icons.restart_alt),
-              title: const Text('Turn off the start date'),
+              title: const T('Turn off the start date'),
               onTap: () => Navigator.pop(c, 'off'),
             ),
         ]),
@@ -353,7 +377,7 @@ class SettingsScreen extends StatelessWidget {
         initialDate: DateTime.now(),
         firstDate: DateTime(2018),
         lastDate: DateTime.now(),
-        helpText: 'Read SMS from this day on',
+        helpText: tr('Read SMS from this day on'),
       );
       if (date == null) return;
     }
@@ -361,8 +385,9 @@ class SettingsScreen extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(date == null
-          ? 'Start date turned off.'
-          : 'SMS are read from ${shortDate(date)} on.${cleared > 0 ? ' $cleared older messages cleared from Review.' : ''}'),
+          ? tr('Start date turned off.')
+          : tr('SMS are read from {d} on.', {'d': shortDate(date)}) +
+              (cleared > 0 ? ' ${tr('{n} older messages cleared from Review.', {'n': cleared})}' : '')),
     ));
   }
 
@@ -371,25 +396,25 @@ class SettingsScreen extends StatelessWidget {
     try {
       text = await Native.pickFileText();
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open the file: $e')));
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not open the file: {e}', {'e': e}))));
       return;
     }
     if (text == null || !context.mounted) return;
     final summary = app.describeBackup(text);
     if (summary == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('That file is not a Household Ledger backup (.json from "Email a backup").')));
+          const SnackBar(content: T('That file is not a Household Ledger backup (.json from "Email a backup").')));
       return;
     }
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Restore this backup?'),
-        content: Text('$summary\n\nEverything currently in the app (${app.txns.length} entries, budgets, rules and '
-            'settings) will be replaced. Email a backup first if you might need the current data.'),
+        title: const T('Restore this backup?'),
+        content: Text('$summary\n\n${tr('Everything currently in the app ({n} entries, budgets, rules and '
+            'settings) will be replaced. Email a backup first if you might need the current data.', {'n': app.txns.length})}'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Replace and restore')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Replace and restore')),
         ],
       ),
     );
@@ -403,13 +428,13 @@ class SettingsScreen extends StatelessWidget {
     try {
       text = await Native.pickFileText();
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open the file: $e')));
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not open the file: {e}', {'e': e}))));
       return;
     }
     if (text == null || !context.mounted) return;
     if (app.describeBackup(text) != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('That is a full backup. Use "Restore from backup" instead.')));
+          const SnackBar(content: T('That is a full backup. Use "Restore from backup" instead.')));
       return;
     }
     final msg = await app.importCsv(text);
@@ -425,7 +450,7 @@ class SettingsScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Import CSV'),
+        title: const T('Import CSV'),
         content: SizedBox(
           width: 400,
           child: TextField(
@@ -440,8 +465,8 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Import')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Import')),
         ],
       ),
     );
@@ -463,11 +488,11 @@ class CategoriesScreen extends StatelessWidget {
       builder: (context, _) {
         final groups = const [('need', 'Needs'), ('want', 'Wants'), ('save', 'Savings'), ('income', 'Income')];
         return Scaffold(
-          appBar: AppBar(title: const Text('Categories')),
+          appBar: AppBar(title: const T('Categories')),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => _edit(context, null),
             icon: const Icon(Icons.add),
-            label: const Text('New category'),
+            label: const T('New category'),
           ),
           body: ListView(padding: const EdgeInsets.only(bottom: 96), children: [
             for (final g in groups) ...[
@@ -477,7 +502,7 @@ class CategoriesScreen extends StatelessWidget {
                   leading: CategoryDot(c.color, size: 14),
                   title: Text(c.name,
                       style: c.archived ? TextStyle(color: Theme.of(context).disabledColor, decoration: TextDecoration.lineThrough) : null),
-                  subtitle: c.archived ? const Text('Hidden') : null,
+                  subtitle: c.archived ? const T('Hidden') : null,
                   trailing: const Icon(Icons.edit_outlined, size: 20),
                   onTap: () => _edit(context, c),
                 ),
@@ -497,20 +522,20 @@ class CategoriesScreen extends StatelessWidget {
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setState) => AlertDialog(
-          title: Text(existing == null ? 'New category' : 'Edit category'),
+          title: Text(tr(existing == null ? 'New category' : 'Edit category')),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               TextField(controller: nameCtl, autofocus: existing == null,
-                  decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder())),
+                  decoration: InputDecoration(labelText: tr('Name'), border: const OutlineInputBorder())),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: grp,
-                decoration: const InputDecoration(labelText: 'Type', border: OutlineInputBorder()),
+                decoration: InputDecoration(labelText: tr('Type'), border: const OutlineInputBorder()),
                 items: const [
-                  DropdownMenuItem(value: 'need', child: Text('Expense · need')),
-                  DropdownMenuItem(value: 'want', child: Text('Expense · want')),
-                  DropdownMenuItem(value: 'save', child: Text('Savings / investment')),
-                  DropdownMenuItem(value: 'income', child: Text('Income')),
+                  DropdownMenuItem(value: 'need', child: T('Expense · need')),
+                  DropdownMenuItem(value: 'want', child: T('Expense · want')),
+                  DropdownMenuItem(value: 'save', child: T('Savings / investment')),
+                  DropdownMenuItem(value: 'income', child: T('Income')),
                 ],
                 onChanged: existing != null && existing.kind == 'income'
                     ? null
@@ -535,16 +560,16 @@ class CategoriesScreen extends StatelessWidget {
               if (existing != null)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Hide this category'),
-                  subtitle: const Text('Past entries keep it'),
+                  title: const T('Hide this category'),
+                  subtitle: const T('Past entries keep it'),
                   value: archived,
                   onChanged: (v) => setState(() => archived = v),
                 ),
             ]),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Save')),
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Save')),
           ],
         ),
       ),
@@ -580,16 +605,16 @@ class RulesScreen extends StatelessWidget {
         final cs = Theme.of(context).colorScheme;
         final rules = List<Rule>.from(app.rules)..sort((a, b) => a.keyword.compareTo(b.keyword));
         return Scaffold(
-          appBar: AppBar(title: const Text('Auto-category rules')),
+          appBar: AppBar(title: const T('Auto-category rules')),
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => _add(context),
             icon: const Icon(Icons.add),
-            label: const Text('Add rule'),
+            label: const T('Add rule'),
           ),
           body: ListView(padding: const EdgeInsets.only(bottom: 96), children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              child: Text(
+              child: T(
                 'When a merchant name contains a keyword, its category is suggested automatically. '
                 'Rules you create by confirming entries are marked "learned".',
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
@@ -600,9 +625,9 @@ class RulesScreen extends StatelessWidget {
                 dense: true,
                 leading: CategoryDot(app.cat(r.categoryId)?.color ?? 0xFF888888, size: 12),
                 title: Text(r.keyword),
-                subtitle: Text('${app.cat(r.categoryId)?.name ?? 'Deleted category'}${r.learned ? ' · learned' : ''}'),
+                subtitle: Text('${app.cat(r.categoryId)?.display ?? tr('Deleted category')}${r.learned ? ' · ${tr('learned')}' : ''}'),
                 trailing: IconButton(
-                  tooltip: 'Delete rule',
+                  tooltip: tr('Delete rule'),
                   icon: const Icon(Icons.close, size: 18),
                   onPressed: () => app.deleteRule(r),
                 ),
@@ -620,15 +645,15 @@ class RulesScreen extends StatelessWidget {
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setState) => AlertDialog(
-          title: const Text('New rule'),
+          title: const T('New rule'),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: ctl, autofocus: true,
-                decoration: const InputDecoration(labelText: 'Merchant contains', hintText: 'e.g. panda', border: OutlineInputBorder())),
+                decoration: InputDecoration(labelText: tr('Merchant contains'), hintText: tr('e.g. panda'), border: const OutlineInputBorder())),
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
               value: catId,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+              decoration: InputDecoration(labelText: tr('Category'), border: const OutlineInputBorder()),
               items: [
                 for (final cat in app.categories.where((x) => !x.archived))
                   DropdownMenuItem(value: cat.id, child: Text(cat.name)),
@@ -637,8 +662,8 @@ class RulesScreen extends StatelessWidget {
             ),
           ]),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Add')),
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Add')),
           ],
         ),
       ),
@@ -652,7 +677,7 @@ const smsKeys = {'senders', 'blockedSenders', 'ignoreKw', 'incomeKw'};
 /// Re-checks waiting items and rescans the current period, then reports the result.
 Future<void> rescanAfterChange(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(const SnackBar(content: Text('Settings saved. Rescanning this period…'), duration: Duration(seconds: 1)));
+  messenger.showSnackBar(const SnackBar(content: T('Settings saved. Rescanning this period…'), duration: Duration(seconds: 1)));
   final msg = await app.applySmsSettings();
   if (msg.isNotEmpty) messenger.showSnackBar(SnackBar(content: Text(msg)));
 }
@@ -669,8 +694,8 @@ Future<void> scanRange(BuildContext context) async {
     firstDate: DateTime(first.year, first.month, first.day),
     lastDate: now,
     initialDateRange: DateTimeRange(start: clamp(per.start), end: clamp(per.end)),
-    helpText: 'Scan SMS from – to',
-    saveText: 'Scan',
+    helpText: tr('Scan SMS from – to'),
+    saveText: tr('Scan'),
   );
   if (range == null || !context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
@@ -722,29 +747,29 @@ class _SendersScreenState extends State<SendersScreen> {
     final extra = selected.where((s) => !known.contains(s)).toList();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bank senders'),
-        actions: [TextButton(onPressed: _save, child: const Text('Save'))],
+        title: const T('Bank senders'),
+        actions: [TextButton(onPressed: _save, child: const T('Save'))],
       ),
       body: ListView(padding: const EdgeInsets.only(bottom: 32), children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
           child: Text(
-            selected.isEmpty
+            tr(selected.isEmpty
                 ? 'No senders selected: any message that looks like a transaction is read. Tick your banks to read only their messages.'
-                : 'Only messages from the ticked senders are read.',
+                : 'Only messages from the ticked senders are read.'),
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
         ),
         if (found == null)
           const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
         else if (found!.isEmpty)
-          const ListTile(title: Text('No transaction messages found in the last 4 months.'))
+          const ListTile(title: T('No transaction messages found in the last 4 months.'))
         else
           for (final f in found!)
             CheckboxListTile(
               value: selected.contains(f.$1.toLowerCase()),
               title: Text(f.$1),
-              subtitle: Text('${f.$2} transaction message${f.$2 == 1 ? '' : 's'} in the last 4 months'),
+              subtitle: Text(trn(f.$2, '{n} transaction message in the last 4 months', '{n} transaction messages in the last 4 months')),
               onChanged: (v) => setState(() {
                 if (v == true) {
                   selected.add(f.$1.toLowerCase());
@@ -757,7 +782,7 @@ class _SendersScreenState extends State<SendersScreen> {
           CheckboxListTile(
             value: true,
             title: Text(e),
-            subtitle: const Text('Added manually'),
+            subtitle: const T('Added manually'),
             onChanged: (_) => setState(() => selected.remove(e)),
           ),
         Padding(
@@ -766,7 +791,7 @@ class _SendersScreenState extends State<SendersScreen> {
             Expanded(
               child: TextField(
                 controller: manualCtl,
-                decoration: const InputDecoration(isDense: true, labelText: 'Add a sender name', border: OutlineInputBorder()),
+                decoration: InputDecoration(isDense: true, labelText: tr('Add a sender name'), border: const OutlineInputBorder()),
               ),
             ),
             const SizedBox(width: 8),
@@ -779,7 +804,7 @@ class _SendersScreenState extends State<SendersScreen> {
                   manualCtl.clear();
                 });
               },
-              child: const Text('Add'),
+              child: const T('Add'),
             ),
           ]),
         ),
@@ -795,19 +820,19 @@ Future<void> emailBackupFlow(BuildContext context) async {
     final email = await showDialog<String>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Where should backups go?'),
+        title: const T('Where should backups go?'),
         content: TextField(
           controller: ctl,
           autofocus: true,
           keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
-            labelText: 'Your Gmail address',
-            helperText: 'Saved for next time. You can change it in Settings.',
+          decoration: InputDecoration(
+            labelText: tr('Your Gmail address'),
+            helperText: tr('Saved for next time. You can change it in Settings.'),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, ctl.text.trim()), child: const Text('Continue')),
+          TextButton(onPressed: () => Navigator.pop(c), child: const T('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, ctl.text.trim()), child: const T('Continue')),
         ],
       ),
     );
@@ -818,14 +843,14 @@ Future<void> emailBackupFlow(BuildContext context) async {
     final how = await app.emailBackup();
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(how == 'gmail'
+        content: Text(tr(how == 'gmail'
             ? 'Gmail opened with the backup attached. Tap Send to finish.'
-            : 'Choose your mail app, then tap Send to finish.'),
+            : 'Choose your mail app, then tap Send to finish.')),
       ));
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open email: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not open email: {e}', {'e': e}))));
     }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Category;
 
 import '../format.dart';
+import '../i18n.dart';
 import '../models.dart';
 import '../periods.dart';
 import '../state.dart';
@@ -30,7 +31,7 @@ class ReviewScreen extends StatelessWidget {
         final cs = Theme.of(context).colorScheme;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Review'),
+            title: const T('Review'),
             actions: [
               if (app.scanning)
                 const Padding(
@@ -38,8 +39,8 @@ class ReviewScreen extends StatelessWidget {
                   child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
                 )
               else ...[
-                IconButton(tooltip: 'Scan a date range', icon: const Icon(Icons.date_range), onPressed: () => scanRange(context)),
-                IconButton(tooltip: 'Scan new SMS', icon: const Icon(Icons.refresh), onPressed: () => _scan(context)),
+                IconButton(tooltip: tr('Scan a date range'), icon: const Icon(Icons.date_range), onPressed: () => scanRange(context)),
+                IconButton(tooltip: tr('Scan new SMS'), icon: const Icon(Icons.refresh), onPressed: () => _scan(context)),
               ],
             ],
           ),
@@ -58,7 +59,7 @@ class ReviewScreen extends StatelessWidget {
                         onDeleted: app.clearReviewWindow,
                       ),
                       if (hidden > 0)
-                        Text('$hidden more outside this range',
+                        Text(tr('{n} more outside this range', {'n': hidden}),
                             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5)),
                     ]),
                   ),
@@ -66,15 +67,16 @@ class ReviewScreen extends StatelessWidget {
                   const SizedBox(height: 48),
                   Icon(Icons.task_alt, size: 56, color: cs.primary),
                   const SizedBox(height: 16),
-                  Text(window != null ? 'Nothing waiting in this range' : 'All caught up',
+                  Text(tr(window != null ? 'Nothing waiting in this range' : 'All caught up'),
                       textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 8),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Text(
                       app.smsStartDate != null
-                          ? 'Bank SMS from ${shortDate(app.smsStartDate!)} onwards show up here. Pull down to scan new messages.'
-                          : 'New bank SMS show up here for you to confirm. Pull down to scan new messages, or tap the calendar to scan a date range.',
+                          ? tr('Bank SMS from {d} onwards show up here. Pull down to scan new messages.',
+                              {'d': shortDate(app.smsStartDate!)})
+                          : tr('New bank SMS show up here for you to confirm. Pull down to scan new messages, or tap the calendar to scan a date range.'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
@@ -86,17 +88,17 @@ class ReviewScreen extends StatelessWidget {
                       if (suggested > 1)
                         FilledButton.tonalIcon(
                           icon: const Icon(Icons.done_all),
-                          label: Text('Confirm $suggested suggested'),
+                          label: Text(tr('Confirm {n} suggested', {'n': suggested})),
                           onPressed: () async {
                             final n = await app.confirmAllSuggested(only: items);
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Confirmed $n entries.')));
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Confirmed {n} entries.', {'n': n}))));
                             }
                           },
                         ),
                       OutlinedButton.icon(
                         icon: const Icon(Icons.clear_all),
-                        label: Text('Ignore all ${items.length}'),
+                        label: Text(tr('Ignore all {n}', {'n': items.length})),
                         onPressed: () => _ignoreAll(context, items),
                       ),
                     ]),
@@ -116,12 +118,12 @@ Future<void> _ignoreAll(BuildContext context, List<SmsItem> items) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (c) => AlertDialog(
-      title: Text('Ignore ${items.length} message${items.length == 1 ? '' : 's'}?'),
-      content: const Text('They leave the Review list and are not added to your entries. '
+      title: Text(trn(items.length, 'Ignore {n} message?', 'Ignore {n} messages?')),
+      content: const T('They leave the Review list and are not added to your entries. '
           'Use this when imported statements already cover these days.'),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Ignore all')),
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Ignore all')),
       ],
     ),
   );
@@ -166,7 +168,7 @@ class _ReviewCardState extends State<ReviewCard> {
     final amount = parseAmount(amountCtl.text);
     if (amount == null || amount <= 0 || categoryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Check the amount and pick a category first.')));
+          const SnackBar(content: T('Check the amount and pick a category first.')));
       return;
     }
     await app.confirmSms(widget.item,
@@ -181,14 +183,14 @@ class _ReviewCardState extends State<ReviewCard> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
             leading: const Icon(Icons.visibility_off_outlined),
-            title: const Text('Ignore this message'),
-            subtitle: const Text('Not a real expense, e.g. a transfer between my own accounts'),
+            title: const T('Ignore this message'),
+            subtitle: const T('Not a real expense, e.g. a transfer between my own accounts'),
             onTap: () => Navigator.pop(c, 'one'),
           ),
           ListTile(
             leading: const Icon(Icons.block),
-            title: Text('Always ignore ${widget.item.sender}'),
-            subtitle: const Text('Stop importing messages from this sender'),
+            title: Text(tr('Always ignore {s}', {'s': widget.item.sender})),
+            subtitle: const T('Stop importing messages from this sender'),
             onTap: () => Navigator.pop(c, 'sender'),
           ),
         ]),
@@ -211,7 +213,7 @@ class _ReviewCardState extends State<ReviewCard> {
           ),
           GestureDetector(
             onTap: () => setState(() => showRaw = !showRaw),
-            child: Text(showRaw ? 'Hide SMS' : 'Show SMS',
+            child: Text(tr(showRaw ? 'Hide SMS' : 'Show SMS'),
                 style: TextStyle(color: cs.primary, fontSize: 12.5, fontWeight: FontWeight.w600)),
           ),
         ]),
@@ -239,8 +241,8 @@ class _ReviewCardState extends State<ReviewCard> {
             showSelectedIcon: false,
             style: const ButtonStyle(visualDensity: VisualDensity.compact),
             segments: const [
-              ButtonSegment(value: 'expense', label: Text('Out')),
-              ButtonSegment(value: 'income', label: Text('In')),
+              ButtonSegment(value: 'expense', label: T('Out')),
+              ButtonSegment(value: 'income', label: T('In')),
             ],
             selected: {kind},
             onSelectionChanged: (s) => setState(() => kind = s.first),
@@ -249,7 +251,7 @@ class _ReviewCardState extends State<ReviewCard> {
         const SizedBox(height: 10),
         TextField(
           controller: merchantCtl,
-          decoration: const InputDecoration(isDense: true, labelText: 'Merchant', border: OutlineInputBorder()),
+          decoration: InputDecoration(isDense: true, labelText: tr('Merchant'), border: const OutlineInputBorder()),
         ),
         const SizedBox(height: 10),
         DropdownButtonFormField<int>(
@@ -257,26 +259,26 @@ class _ReviewCardState extends State<ReviewCard> {
           isExpanded: true,
           decoration: InputDecoration(
             isDense: true,
-            labelText: categoryId != null && categoryId == widget.item.categoryId ? 'Category (suggested)' : 'Category',
+            labelText: tr(categoryId != null && categoryId == widget.item.categoryId ? 'Category (suggested)' : 'Category'),
             border: const OutlineInputBorder(),
           ),
           items: [
             for (final c in cats)
               DropdownMenuItem(
                 value: c.id,
-                child: Row(children: [CategoryDot(c.color), const SizedBox(width: 8), Text(c.name)]),
+                child: Row(children: [CategoryDot(c.color), const SizedBox(width: 8), Text(c.display)]),
               ),
           ],
           onChanged: (v) => setState(() => categoryId = v),
         ),
         Row(children: [
           Checkbox(value: remember, onChanged: (v) => setState(() => remember = v ?? true)),
-          const Expanded(child: Text('Remember for this merchant', style: TextStyle(fontSize: 13.5))),
+          const Expanded(child: T('Remember for this merchant', style: TextStyle(fontSize: 13.5))),
         ]),
         Row(children: [
-          TextButton(onPressed: _ignore, child: const Text('Ignore')),
+          TextButton(onPressed: _ignore, child: const T('Ignore')),
           const Spacer(),
-          FilledButton.icon(onPressed: _confirm, icon: const Icon(Icons.check), label: const Text('Confirm')),
+          FilledButton.icon(onPressed: _confirm, icon: const Icon(Icons.check), label: const T('Confirm')),
         ]),
       ]),
     );

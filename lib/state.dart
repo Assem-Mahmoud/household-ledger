@@ -7,6 +7,7 @@ import 'package:sqflite/sqflite.dart';
 
 import 'defaults.dart';
 import 'format.dart';
+import 'i18n.dart';
 import 'models.dart';
 import 'native.dart';
 import 'periods.dart';
@@ -29,6 +30,9 @@ class AppState extends ChangeNotifier {
   /// Bottom-navigation index, so any screen can jump to another tab.
   final tab = ValueNotifier<int>(0);
 
+  /// Language preference: 'system', 'en' or 'ar'. Listened to by the app root.
+  final language = ValueNotifier<String>('system');
+
   /// Sub-tab of the Budget screen: 0 this period, 1 plan, 2 template.
   final budgetTab = ValueNotifier<int>(0);
 
@@ -40,6 +44,8 @@ class AppState extends ChangeNotifier {
       if (from < 2) await _createPlanTables(d);
     });
     await _loadSettings();
+    language.value = settings['lang']?.isNotEmpty == true ? settings['lang']! : 'system';
+    setLanguage(language.value);
     await _loadCategories();
     await _loadTxns();
     await _loadOverrides();
@@ -161,7 +167,18 @@ class AppState extends ChangeNotifier {
 
   // ------------------------------------------------------------- settings
 
-  String get currency => settings['currency']?.trim().isNotEmpty == true ? settings['currency']!.trim() : 'SAR';
+  String get currency {
+    final c = settings['currency']?.trim().isNotEmpty == true ? settings['currency']!.trim() : 'SAR';
+    return isAr && c.toUpperCase() == 'SAR' ? 'ر.س' : c;
+  }
+
+  Future<void> setLanguagePref(String pref) async {
+    await setSetting('lang', pref, notify: false);
+    setLanguage(pref);
+    await Native.setLang(lang);
+    language.value = pref;
+    notifyListeners();
+  }
   int get cycleStartDay => (int.tryParse(settings['cycleDay'] ?? '1') ?? 1).clamp(1, 28).toInt();
   int get alertPct => (int.tryParse(settings['alertPct'] ?? '80') ?? 80).clamp(50, 95).toInt();
   bool flag(String key) => settings[key] == '1';
@@ -188,6 +205,7 @@ class AppState extends ChangeNotifier {
       await Native.cancelReminder();
     }
     await Native.setPref('smsAlerts', flag('smsAlerts') && flag('smsOn'));
+    await Native.setLang(lang);
   }
 
   // -------------------------------------------------------------- periods
@@ -341,21 +359,26 @@ class AppState extends ChangeNotifier {
     final budget = budgetFor(per, c.id);
     if (budget > 0) {
       if (spent >= budget) {
-        await fire('cat${c.id}', 2, '${c.name} is over budget',
-            'Spent ${fmt(spent)} of ${fmt(budget)} $currency this month (${fmt(spent - budget)} over).');
+        await fire('cat${c.id}', 2, tr('{cat} is over budget', {'cat': c.display}),
+            tr('Spent {a} of {b} {cur} this month ({c} over).',
+                {'a': fmt(spent), 'b': fmt(budget), 'cur': currency, 'c': fmt(spent - budget)}));
       } else if (spent >= budget * pct) {
-        await fire('cat${c.id}', 1, '${c.name} at ${(spent / budget * 100).round()}% of budget',
-            '${fmt(budget - spent)} $currency left${daysLeft > 0 ? ' with $daysLeft days to go' : ''}.');
+        await fire('cat${c.id}', 1, tr('{cat} at {p}% of budget', {'cat': c.display, 'p': (spent / budget * 100).round()}),
+            daysLeft > 0
+                ? tr('{a} {cur} left with {d} days to go.', {'a': fmt(budget - spent), 'cur': currency, 'd': daysLeft})
+                : tr('{a} {cur} left.', {'a': fmt(budget - spent), 'cur': currency}));
       }
     }
     final total = totalBudget(per);
     if (total > 0) {
       if (st.spend >= total) {
-        await fire('total', 2, 'Monthly budget exceeded',
-            'Spending is ${fmt(st.spend)} against ${fmt(total)} $currency budgeted.');
+        await fire('total', 2, tr('Monthly budget exceeded'),
+            tr('Spending is {a} against {b} {cur} budgeted.', {'a': fmt(st.spend), 'b': fmt(total), 'cur': currency}));
       } else if (st.spend >= total * pct) {
-        await fire('total', 1, '${(st.spend / total * 100).round()}% of the monthly budget used',
-            '${fmt(total - st.spend)} $currency left${daysLeft > 0 ? ' for the next $daysLeft days' : ''}.');
+        await fire('total', 1, tr('{p}% of the monthly budget used', {'p': (st.spend / total * 100).round()}),
+            daysLeft > 0
+                ? tr('{a} {cur} left for the next {d} days.', {'a': fmt(total - st.spend), 'cur': currency, 'd': daysLeft})
+                : tr('{a} {cur} left.', {'a': fmt(total - st.spend), 'cur': currency}));
       }
     }
   }
@@ -415,7 +438,7 @@ class AppState extends ChangeNotifier {
     try {
       final perm = await Native.requestPermissions(sms: true);
       if (perm['sms'] != true) {
-        return 'SMS access is off. Allow it when asked, or in Android Settings → Apps → Household Ledger → Permissions.';
+        return tr('SMS access is off. Allow it when asked, or in Android Settings → Apps → Household Ledger → Permissions.');
       }
       final ranged = from != null || to != null;
       var since = from != null
@@ -428,8 +451,8 @@ class AppState extends ChangeNotifier {
       if (start != null) {
         final cut = start.millisecondsSinceEpoch - 1;
         if (until != null && until <= cut) {
-          return 'SMS before ${shortDate(start)} ${start.year} are switched off, because imported statements cover that time. '
-              'Change it in Settings → SMS start date.';
+          return tr('SMS before {date} are switched off, because imported statements cover that time. '
+              'Change it in Settings → SMS start date.', {'date': '${shortDate(start)} ${start.year}'});
         }
         since = max(since, cut);
       }
@@ -472,17 +495,20 @@ class AppState extends ChangeNotifier {
       await _loadPending();
       if (linked > 0) await _loadTxns();
       final window = ranged
-          ? ' between ${from != null ? shortDate(from) : 'the start'} and ${to != null ? shortDate(to) : 'today'}'
+          ? ' ${tr('between {a} and {b}', {'a': from != null ? shortDate(from) : tr('the start'), 'b': to != null ? shortDate(to) : tr('today')})}'
           : '';
-      final linkNote = linked > 0 ? ' $linked matched entries you already had, so they weren\'t added again.' : '';
+      final linkNote = linked > 0
+          ? ' ${tr('{n} matched entries you already had, so they weren\'t added again.', {'n': linked})}'
+          : '';
       if (added == 0) {
         return matched == 0
-            ? 'No bank transactions found$window (${messages.length} messages checked).'
-            : 'No new transactions$window.$linkNote${linked == 0 ? ' $matched were already reviewed.' : ''}';
+            ? tr('No bank transactions found{w} ({n} messages checked).', {'w': window, 'n': messages.length})
+            : '${tr('No new transactions{w}.', {'w': window})}$linkNote'
+                '${linked == 0 ? ' ${tr('{n} were already reviewed.', {'n': matched})}' : ''}';
       }
-      return '$added new transaction${added == 1 ? '' : 's'} to review$window.$linkNote';
+      return '${trn(added, '{n} new transaction to review{w}.', '{n} new transactions to review{w}.', {'w': window})}$linkNote';
     } catch (e) {
-      return 'Could not read messages ($e).';
+      return tr('Could not read messages ({e}).', {'e': e});
     } finally {
       scanning = false;
       notifyListeners();
@@ -706,12 +732,12 @@ class AppState extends ChangeNotifier {
   /// Accepts this app's export and the web ledger export (date,type,category,amount_sar,note).
   Future<String> importCsv(String text) async {
     final rows = _parseCsv(text.trim());
-    if (rows.length < 2) return 'Nothing to import. Paste rows with a header line first.';
+    if (rows.length < 2) return tr('Nothing to import. Paste rows with a header line first.');
     final head = rows.first.map((h) => h.trim().toLowerCase()).toList();
     int col(List<String> names) => head.indexWhere((h) => names.contains(h));
     final iDate = col(['date']), iType = col(['type', 'kind']), iCat = col(['category']);
     final iAmt = col(['amount', 'amount_sar']), iNote = col(['note']), iMer = col(['merchant']);
-    if (iDate < 0 || iAmt < 0) return 'The header needs at least "date" and "amount" columns.';
+    if (iDate < 0 || iAmt < 0) return tr('The header needs at least "date" and "amount" columns.');
     var added = 0, skipped = 0, duplicates = 0;
     // How many entries already exist per day/direction/amount, so re-importing or overlapping
     // with SMS-confirmed entries never double-counts.
@@ -752,12 +778,12 @@ class AppState extends ChangeNotifier {
     await _loadPending();
     notifyListeners();
     final parts = <String>[
-      'Imported $added entr${added == 1 ? 'y' : 'ies'}',
-      if (duplicates > 0) '$duplicates already in the app were skipped',
-      if (skipped > 0) '$skipped unreadable rows ignored',
-      if (linkedPending > 0) '$linkedPending waiting SMS matched imported entries and were cleared from Review',
+      trn(added, 'Imported {n} entry', 'Imported {n} entries'),
+      if (duplicates > 0) tr('{n} already in the app were skipped', {'n': duplicates}),
+      if (skipped > 0) tr('{n} unreadable rows ignored', {'n': skipped}),
+      if (linkedPending > 0) tr('{n} waiting SMS matched imported entries and were cleared from Review', {'n': linkedPending}),
     ];
-    return '${parts.join(', ')}.';
+    return '${parts.join(isAr ? '، ' : ', ')}.';
   }
 
   // ------------------------------------------------------------ monthly plan
@@ -862,9 +888,14 @@ class AppState extends ChangeNotifier {
       final seen = await db.query('alerts', where: 'period = ? AND scope = ?', whereArgs: [per.key, scope]);
       if (seen.isNotEmpty) continue;
       await db.insert('alerts', {'period': per.key, 'scope': scope, 'level': 1});
-      final verb = l.item.kind == 'save' ? 'Set aside' : 'Pay';
-      await Native.notify(30000 + l.item.id, '$verb: ${l.item.title}',
-          '${fmt(l.remaining > 0 ? l.remaining : l.target)} $currency ${l.due!.isBefore(today) ? 'was due on ${shortDate(l.due!)}' : 'is due today'}. Tick it in your plan once done.');
+      final amount = fmt(l.remaining > 0 ? l.remaining : l.target);
+      await Native.notify(
+          30000 + l.item.id,
+          tr(l.item.kind == 'save' ? 'Set aside: {t}' : 'Pay: {t}', {'t': l.item.title}),
+          l.due!.isBefore(today)
+              ? tr('{a} {cur} was due on {d}. Tick it in your plan once done.',
+                  {'a': amount, 'cur': currency, 'd': shortDate(l.due!)})
+              : tr('{a} {cur} is due today. Tick it in your plan once done.', {'a': amount, 'cur': currency}));
     }
   }
 
@@ -895,9 +926,10 @@ class AppState extends ChangeNotifier {
       content: json,
       fileName: name,
       to: settings['backupEmail'] ?? '',
-      subject: 'Household Ledger backup ${isoDate(now)}',
-      body: 'Backup of ${txns.length} entries, created ${isoDate(now)} ${two(now.hour)}:${two(now.minute)}.\n'
+      subject: tr('Household Ledger backup {d}', {'d': isoDate(now)}),
+      body: tr('Backup of {n} entries, created {d}.\n'
           'To restore: save the attached file, then in the app open Settings → Restore from backup.',
+          {'n': txns.length, 'd': '${isoDate(now)} ${two(now.hour)}:${two(now.minute)}'}),
     );
     await setSetting('lastBackup', '${now.millisecondsSinceEpoch}');
     return how;
@@ -917,8 +949,8 @@ class AppState extends ChangeNotifier {
       final d = jsonDecode(text);
       if (d is! Map || d['app'] != 'household_ledger') return null;
       final n = (d['txns'] as List?)?.length ?? 0;
-      final created = (d['createdAt'] as String?)?.substring(0, 10) ?? 'unknown date';
-      return 'Backup from $created with $n entries.';
+      final created = (d['createdAt'] as String?)?.substring(0, 10) ?? tr('unknown date');
+      return tr('Backup from {d} with {n} entries.', {'d': created, 'n': n});
     } catch (_) {
       return null;
     }
@@ -927,7 +959,7 @@ class AppState extends ChangeNotifier {
   /// Replaces everything in the app with the backup's contents.
   Future<String> restoreBackup(String text) async {
     final d = jsonDecode(text) as Map<String, dynamic>;
-    if (d['app'] != 'household_ledger') return 'This file is not a Household Ledger backup.';
+    if (d['app'] != 'household_ledger') return tr('This file is not a Household Ledger backup.');
     final keepBackupInfo = {'backupEmail': settings['backupEmail'], 'lastBackup': settings['lastBackup']};
     await db.transaction((tx) async {
       for (final t in _backupTables) {
@@ -952,7 +984,7 @@ class AppState extends ChangeNotifier {
     period = periodFor(DateTime.now(), cycleStartDay);
     await applyReminder();
     notifyListeners();
-    return 'Restored ${txns.length} entries.';
+    return tr('Restored {n} entries.', {'n': txns.length});
   }
 
   List<List<String>> _parseCsv(String s) {

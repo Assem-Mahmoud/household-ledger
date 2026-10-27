@@ -65,6 +65,13 @@ class Native {
     } catch (_) {}
   }
 
+  /// Language for notifications raised by Android itself (daily reminder, new SMS): 'en' or 'ar'.
+  static Future<void> setLang(String lang) async {
+    try {
+      await _ch.invokeMethod('setLang', {'lang': lang});
+    } catch (_) {}
+  }
+
   static Future<void> setPref(String key, bool value) async {
     try {
       await _ch.invokeMethod('setPref', {'key': key, 'value': value});

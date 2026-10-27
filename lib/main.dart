@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
+import 'i18n.dart';
 
 import 'native.dart';
 import 'screens/analytics.dart';
@@ -25,12 +28,24 @@ class LedgerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Household Ledger',
-      debugShowCheckedModeBanner: false,
-      theme: _theme(Brightness.light),
-      darkTheme: _theme(Brightness.dark),
-      home: const Shell(),
+    // Changing the language rebuilds the whole app so every screen picks up the new texts.
+    return ValueListenableBuilder<String>(
+      valueListenable: app.language,
+      builder: (context, _, __) => MaterialApp(
+        key: ValueKey(lang),
+        title: 'Household Ledger',
+        debugShowCheckedModeBanner: false,
+        theme: _theme(Brightness.light),
+        darkTheme: _theme(Brightness.dark),
+        locale: Locale(lang),
+        supportedLocales: const [Locale('en'), Locale('ar')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: const Shell(),
+      ),
     );
   }
 }
@@ -65,21 +80,25 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     }
   }
 
+  static bool _started = false;
+
   Future<void> _firstRun() async {
+    if (_started) return; // the shell is rebuilt when the language changes
+    _started = true;
     if (!app.flag('onboarded')) {
       final go = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (c) => AlertDialog(
-          title: const Text('Welcome to Household Ledger'),
-          content: const Text(
+          title: const T('Welcome to Household Ledger'),
+          content: const T(
             'The app can read your bank SMS to capture card purchases, transfers and salary automatically. '
             'You confirm each one and pick its category. Messages are read on this phone only.\n\n'
             'It also sends budget warnings and a daily reminder to log cash spending.',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Manual entry only')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Allow SMS & notifications')),
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Manual entry only')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Allow SMS & notifications')),
           ],
         ),
       );
@@ -113,7 +132,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
             selectedIndex: index,
             onDestinationSelected: (i) => app.tab.value = i,
             destinations: [
-              const NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard), label: 'Home'),
+              NavigationDestination(icon: const Icon(Icons.space_dashboard_outlined), selectedIcon: const Icon(Icons.space_dashboard), label: tr('Home')),
               NavigationDestination(
                 icon: Badge(
                   isLabelVisible: app.pending.isNotEmpty,
@@ -121,11 +140,11 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                   child: const Icon(Icons.inbox_outlined),
                 ),
                 selectedIcon: const Icon(Icons.inbox),
-                label: 'Review',
+                label: tr('Review'),
               ),
-              const NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Entries'),
-              const NavigationDestination(icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights), label: 'Analytics'),
-              const NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Plan'),
+              NavigationDestination(icon: const Icon(Icons.receipt_long_outlined), selectedIcon: const Icon(Icons.receipt_long), label: tr('Entries')),
+              NavigationDestination(icon: const Icon(Icons.insights_outlined), selectedIcon: const Icon(Icons.insights), label: tr('Analytics')),
+              NavigationDestination(icon: const Icon(Icons.account_balance_wallet_outlined), selectedIcon: const Icon(Icons.account_balance_wallet), label: tr('Plan')),
             ],
           ),
         ),

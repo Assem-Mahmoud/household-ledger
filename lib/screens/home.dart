@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../format.dart';
+import '../i18n.dart';
 import '../periods.dart';
 import '../state.dart';
 import '../stats.dart';
@@ -40,7 +41,7 @@ class HomeScreen extends StatelessWidget {
             centerTitle: true,
             actions: [
               IconButton(
-                tooltip: 'Settings',
+                tooltip: tr('Settings'),
                 icon: const Icon(Icons.settings_outlined),
                 onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
               ),
@@ -49,7 +50,7 @@ class HomeScreen extends StatelessWidget {
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EntryForm())),
             icon: const Icon(Icons.add),
-            label: const Text('Add entry'),
+            label: const T('Add entry'),
           ),
           body: RefreshIndicator(
             onRefresh: () async {
@@ -69,9 +70,9 @@ class HomeScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                       child: ListTile(
                         leading: Icon(Icons.sms_outlined, color: cs.onPrimaryContainer),
-                        title: Text('${app.pending.length} bank transaction${app.pending.length == 1 ? '' : 's'} to review',
+                        title: Text(trn(app.pending.length, '{n} bank transaction to review', '{n} bank transactions to review'),
                             style: TextStyle(color: cs.onPrimaryContainer, fontWeight: FontWeight.w600)),
-                        subtitle: Text('Confirm the amount and pick a category', style: TextStyle(color: cs.onPrimaryContainer)),
+                        subtitle: T('Confirm the amount and pick a category', style: TextStyle(color: cs.onPrimaryContainer)),
                         trailing: Icon(Icons.chevron_right, color: cs.onPrimaryContainer),
                         onTap: () => app.tab.value = 1,
                       ),
@@ -88,11 +89,11 @@ class HomeScreen extends StatelessWidget {
                         leading: const Icon(Icons.backup_outlined, color: warnColor),
                         title: Text(
                           app.daysSinceBackup == null
-                              ? 'Back up your data to Gmail'
-                              : 'Last backup was ${app.daysSinceBackup} days ago',
+                              ? tr('Back up your data to Gmail')
+                              : tr('Last backup was {n} days ago', {'n': app.daysSinceBackup}),
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        subtitle: const Text('Your entries live only on this phone'),
+                        subtitle: const T('Your entries live only on this phone'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => emailBackupFlow(context),
                       ),
@@ -105,7 +106,7 @@ class HomeScreen extends StatelessWidget {
                     Row(children: [
                       const Expanded(child: Eyebrow('This month')),
                       if (rate != null)
-                        Pill('${(rate * 100).round()}% of income not spent',
+                        Pill(tr('{p}% of income not spent', {'p': (rate * 100).round()}),
                             rate >= 0.2 ? goodColor : rate >= 0.05 ? warnColor : badColor),
                     ]),
                     const SizedBox(height: 10),
@@ -121,8 +122,8 @@ class HomeScreen extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            'You moved ${fmt(s.save - s.net)} more to savings than this month left over, '
-                            'using money already in your account.',
+                            tr('You moved {a} more to savings than this month left over, '
+                                'using money already in your account.', {'a': fmt(s.save - s.net)}),
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                           ),
                         ),
@@ -140,15 +141,17 @@ class HomeScreen extends StatelessWidget {
                         app.budgetTab.value = 0;
                         app.tab.value = 4;
                       },
-                      child: const Text('Manage')),
+                      child: const T('Manage')),
                   child: total <= 0
-                      ? Text('No budgets set. Set a monthly template once and every month follows it.',
+                      ? T('No budgets set. Set a monthly template once and every month follows it.',
                           style: TextStyle(color: cs.onSurfaceVariant))
                       : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                           Row(children: [
                             Expanded(
                               child: Text(
-                                s.spend <= total ? '${fmt(total - s.spend)} ${app.currency} left' : '${fmt(s.spend - total)} ${app.currency} over',
+                                s.spend <= total
+                                    ? tr('{a} {cur} left', {'a': fmt(total - s.spend), 'cur': app.currency})
+                                    : tr('{a} {cur} over', {'a': fmt(s.spend - total), 'cur': app.currency}),
                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w600, color: s.spend > total ? badColor : null),
                               ),
@@ -161,12 +164,13 @@ class HomeScreen extends StatelessWidget {
                           if (per.isCurrent) ...[
                             const SizedBox(height: 6),
                             Text(
-                              '${per.days - per.elapsed + 1} days left · ${(per.elapsed / per.days * 100).round()}% of the period gone',
+                              tr('{d} days left · {p}% of the period gone',
+                                  {'d': per.days - per.elapsed + 1, 'p': (per.elapsed / per.days * 100).round()}),
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                             ),
                           ],
                           const SizedBox(height: 14),
-                          for (final e in watch.take(5)) _catRow(context, e.$1.name, e.$1.color, e.$2, e.$3),
+                          for (final e in watch.take(5)) _catRow(context, e.$1.display, e.$1.color, e.$2, e.$3),
                         ]),
                 ),
 
@@ -179,19 +183,19 @@ class HomeScreen extends StatelessWidget {
                 // Recent
                 SectionCard(
                   title: 'Recent entries',
-                  trailing: TextButton(onPressed: () => app.tab.value = 2, child: const Text('All')),
+                  trailing: TextButton(onPressed: () => app.tab.value = 2, child: const T('All')),
                   child: s.list.isEmpty
-                      ? Text('Nothing logged in this period yet.', style: TextStyle(color: cs.onSurfaceVariant))
+                      ? T('Nothing logged in this period yet.', style: TextStyle(color: cs.onSurfaceVariant))
                       : Column(children: [
                           for (final t in s.list.take(5))
                             ListTile(
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                               leading: CategoryDot(app.cat(t.categoryId)?.color ?? 0xFF888888, size: 12),
-                              title: Text(t.label.isEmpty ? (app.cat(t.categoryId)?.name ?? '') : t.label,
+                              title: Text(t.label.isEmpty ? (app.cat(t.categoryId)?.display ?? '') : t.label,
                                   maxLines: 1, overflow: TextOverflow.ellipsis),
-                              subtitle: Text('${app.cat(t.categoryId)?.name ?? ''} · ${shortDate(parseIso(t.date))}'),
-                              trailing: Text('${t.kind == 'income' ? '+' : '−'}${fmtAuto(t.amount)}',
+                              subtitle: Text('${app.cat(t.categoryId)?.display ?? ''} · ${shortDate(parseIso(t.date))}'),
+                              trailing: Text(ltr('${t.kind == 'income' ? '+' : '−'}${fmtAuto(t.amount)}'),
                                   style: TextStyle(
                                       fontFeatures: tabular,
                                       fontWeight: FontWeight.w600,
@@ -212,8 +216,8 @@ class HomeScreen extends StatelessWidget {
   Widget _line(BuildContext context, String label, double v, Color color, {bool bold = false}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(children: [
-          Expanded(child: Text(label, style: TextStyle(fontWeight: bold ? FontWeight.w600 : FontWeight.w400))),
-          Text('${v < 0 ? '−' : ''}${fmt(v.abs())} ${app.currency}',
+          Expanded(child: Text(tr(label), style: TextStyle(fontWeight: bold ? FontWeight.w600 : FontWeight.w400))),
+          Text('${v < 0 ? ltr('−${fmt(v.abs())}') : fmt(v.abs())} ${app.currency}',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: color, fontWeight: bold ? FontWeight.w700 : FontWeight.w500, fontFeatures: tabular)),
         ]),
@@ -228,7 +232,7 @@ class HomeScreen extends StatelessWidget {
           CategoryDot(color),
           const SizedBox(width: 8),
           Expanded(child: Text(name)),
-          Text(budget > 0 ? '${fmt(spent)} / ${fmt(budget)}' : '${fmt(spent)} · no budget',
+          Text(budget > 0 ? '${fmt(spent)} / ${fmt(budget)}' : tr('{a} · no budget', {'a': fmt(spent)}),
               style: TextStyle(color: spent > budget && budget > 0 ? badColor : cs.onSurfaceVariant, fontSize: 13, fontFeatures: tabular)),
         ]),
         if (budget > 0) ...[
