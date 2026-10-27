@@ -44,6 +44,8 @@ final _numFirst = RegExp('$_num\\s*$_cur', caseSensitive: false);
 
 final _merchantPatterns = [
   RegExp(r'(?:^|[\s\n])(?:at|merchant|لدى|عند|التاجر|المتجر|اسم التاجر)\s*[:：]?\s*([^\n]+)', caseSensitive: false),
+  // Al Rajhi online purchase: "لـEHSAN" (لـ = "to/for", merchant in Latin letters)
+  RegExp(r'(?:^|[\s\n])ل\s*[:：]?\s*([A-Za-z0-9][^\n]*)'),
   RegExp(r'(?:^|[\s\n])(?:to|إلى|الى|المستفيد|beneficiary)\s*[:：]\s*([^\n]+)', caseSensitive: false),
   RegExp(r'(?:^|[\s\n])(?:from|من)\s*[:：]\s*([^\n]+)', caseSensitive: false),
   // "purchase of 437 SAR from SHEIN.COM using card" (merchant names are usually upper-case)
@@ -57,6 +59,8 @@ String normalizeDigits(String s) {
   for (var i = 0; i < 10; i++) {
     out = out.replaceAll(ar[i], '$i').replaceAll(fa[i], '$i');
   }
+  // drop bidi control marks and tatweel (Al Rajhi writes "بـSR 5", "لـEHSAN")
+  out = out.replaceAll(RegExp('[\u200e\u200f\u202a-\u202e\u2066-\u2069\u0640]'), '');
   return out.replaceAll('٫', '.').replaceAll('٬', ',');
 }
 

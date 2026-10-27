@@ -83,6 +83,7 @@ class SettingsScreen extends StatelessWidget {
               onChanged: (v) async {
                 await app.setSetting('smsOn', v ? '1' : '0');
                 await app.applyReminder();
+                if (v && context.mounted) await rescanAfterChange(context);
               },
             ),
             SwitchListTile(
@@ -96,29 +97,17 @@ class SettingsScreen extends StatelessWidget {
                   : null,
             ),
             ListTile(
-              title: const Text('Scan again from a date'),
-              subtitle: const Text('Re-reads older messages. Already reviewed ones are skipped.'),
-              trailing: const Icon(Icons.history),
-              onTap: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now().subtract(const Duration(days: 30)),
-                  firstDate: DateTime(2018),
-                  lastDate: DateTime.now(),
-                );
-                if (d == null) return;
-                final msg = await app.scanSms(from: d);
-                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-              },
+              title: const Text('Scan a date range'),
+              subtitle: const Text('Read messages between two dates. Already reviewed ones are skipped.'),
+              trailing: const Icon(Icons.date_range),
+              onTap: () => scanRange(context),
             ),
             ListTile(
               title: const Text('Bank senders'),
               subtitle: Text(app.lines('senders').isEmpty
                   ? 'Automatic: any SMS that looks like a transaction'
                   : 'Only: ${app.lines('senders').join(', ')}'),
-              onTap: () => _editText(context, 'Bank senders', 'senders',
-                  help: 'One sender name per line exactly as it appears in Messages (e.g. AlRajhiBank). Leave empty for automatic detection.',
-                  multiline: true),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SendersScreen())),
             ),
             ListTile(
               title: const Text('Ignored senders'),
@@ -218,7 +207,9 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
-    if (result != null) await app.setSetting(key, result.trim());
+    if (result == null) return;
+    await app.setSetting(key, result.trim());
+    if (smsKeys.contains(key) && context.mounted) await rescanAfterChange(context);
   }
 
   Future<void> _testParser(BuildContext context) async {
@@ -486,5 +477,146 @@ class RulesScreen extends StatelessWidget {
       ),
     );
     if (ok == true && catId != null && ctl.text.trim().isNotEmpty) await app.addRule(ctl.text, catId!);
+  }
+}
+
+const smsKeys = {'senders', 'blockedSenders', 'ignoreKw', 'incomeKw'};
+
+/// Re-checks waiting items and rescans the current period, then reports the result.
+Future<void> rescanAfterChange(BuildContext context) async {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(const SnackBar(content: Text('Settings saved. Rescanning this period…'), duration: Duration(seconds: 1)));
+  final msg = await app.applySmsSettings();
+  if (msg.isNotEmpty) messenger.showSnackBar(SnackBar(content: Text(msg)));
+}
+
+/// Pick a from–to window and scan it.
+Future<void> scanRange(BuildContext context) async {
+  final now = DateTime.now();
+  final per = app.period;
+  final range = await showDateRangePicker(
+    context: context,
+    firstDate: DateTime(2018),
+    lastDate: now,
+    initialDateRange: DateTimeRange(
+      start: per.start.isAfter(now) ? now : per.start,
+      end: per.end.isAfter(now) ? now : per.end,
+    ),
+    helpText: 'Scan SMS from – to',
+    saveText: 'Scan',
+  );
+  if (range == null || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final msg = await app.scanSms(from: range.start, to: range.end);
+  if (msg.isNotEmpty) messenger.showSnackBar(SnackBar(content: Text(msg)));
+}
+
+// --------------------------------------------------------------- senders
+
+/// Choose which SMS senders are banks, from the senders found in the phone's messages.
+class SendersScreen extends StatefulWidget {
+  const SendersScreen({super.key});
+  @override
+  State<SendersScreen> createState() => _SendersScreenState();
+}
+
+class _SendersScreenState extends State<SendersScreen> {
+  List<(String, int)>? found;
+  late Set<String> selected;
+  final manualCtl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    selected = app.lines('senders').toSet();
+    app.detectSenders().then((v) {
+      if (mounted) setState(() => found = v);
+    });
+  }
+
+  @override
+  void dispose() {
+    manualCtl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    await app.setSetting('senders', selected.join('\n'));
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    await rescanAfterChange(context);
+    nav.pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final known = found?.map((e) => e.$1.toLowerCase()).toSet() ?? <String>{};
+    final extra = selected.where((s) => !known.contains(s)).toList();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Bank senders'),
+        actions: [TextButton(onPressed: _save, child: const Text('Save'))],
+      ),
+      body: ListView(padding: const EdgeInsets.only(bottom: 32), children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          child: Text(
+            selected.isEmpty
+                ? 'No senders selected: any message that looks like a transaction is read. Tick your banks to read only their messages.'
+                : 'Only messages from the ticked senders are read.',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+        ),
+        if (found == null)
+          const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+        else if (found!.isEmpty)
+          const ListTile(title: Text('No transaction messages found in the last 4 months.'))
+        else
+          for (final f in found!)
+            CheckboxListTile(
+              value: selected.contains(f.$1.toLowerCase()),
+              title: Text(f.$1),
+              subtitle: Text('${f.$2} transaction message${f.$2 == 1 ? '' : 's'} in the last 4 months'),
+              onChanged: (v) => setState(() {
+                if (v == true) {
+                  selected.add(f.$1.toLowerCase());
+                } else {
+                  selected.remove(f.$1.toLowerCase());
+                }
+              }),
+            ),
+        for (final e in extra)
+          CheckboxListTile(
+            value: true,
+            title: Text(e),
+            subtitle: const Text('Added manually'),
+            onChanged: (_) => setState(() => selected.remove(e)),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: Row(children: [
+            Expanded(
+              child: TextField(
+                controller: manualCtl,
+                decoration: const InputDecoration(isDense: true, labelText: 'Add a sender name', border: OutlineInputBorder()),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              onPressed: () {
+                final t = manualCtl.text.trim().toLowerCase();
+                if (t.isEmpty) return;
+                setState(() {
+                  selected.add(t);
+                  manualCtl.clear();
+                });
+              },
+              child: const Text('Add'),
+            ),
+          ]),
+        ),
+      ]),
+    );
   }
 }

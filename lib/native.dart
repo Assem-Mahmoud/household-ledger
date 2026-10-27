@@ -22,8 +22,11 @@ class Native {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> readSms(int sinceMillis) async {
-    final r = await _ch.invokeListMethod<dynamic>('readSms', {'since': sinceMillis});
+  static Future<List<Map<String, dynamic>>> readSms(int sinceMillis, {int? untilMillis}) async {
+    final r = await _ch.invokeListMethod<dynamic>('readSms', {
+      'since': sinceMillis,
+      if (untilMillis != null) 'until': untilMillis,
+    });
     return (r ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 

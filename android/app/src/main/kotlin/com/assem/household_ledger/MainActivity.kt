@@ -45,9 +45,10 @@ class MainActivity : FlutterActivity() {
 
                     "readSms" -> {
                         val since = (call.argument<Number>("since") ?: 0).toLong()
+                        val until = (call.argument<Number>("until") ?: Long.MAX_VALUE).toLong()
                         Thread {
                             try {
-                                val list = readInbox(since)
+                                val list = readInbox(since, until)
                                 runOnUiThread { result.success(list) }
                             } catch (e: Exception) {
                                 runOnUiThread { result.error("sms_read_failed", e.message, null) }
@@ -116,18 +117,18 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun readInbox(since: Long): List<Map<String, Any>> {
+    private fun readInbox(since: Long, until: Long): List<Map<String, Any>> {
         val out = ArrayList<Map<String, Any>>()
         if (!has(Manifest.permission.READ_SMS)) return out
         val cursor = contentResolver.query(
             Uri.parse("content://sms/inbox"),
             arrayOf("_id", "address", "body", "date"),
-            "date > ?",
-            arrayOf(since.toString()),
+            "date > ? AND date <= ?",
+            arrayOf(since.toString(), until.toString()),
             "date DESC"
         ) ?: return out
         cursor.use {
-            while (it.moveToNext() && out.size < 3000) {
+            while (it.moveToNext() && out.size < 5000) {
                 out.add(
                     mapOf(
                         "id" to it.getLong(0).toString(),

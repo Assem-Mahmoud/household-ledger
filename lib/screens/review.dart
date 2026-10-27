@@ -5,6 +5,7 @@ import '../models.dart';
 import '../periods.dart';
 import '../state.dart';
 import '../widgets.dart';
+import 'settings.dart' show scanRange;
 
 /// Bank SMS waiting for confirmation: check amount, pick category, confirm or ignore.
 class ReviewScreen extends StatelessWidget {
@@ -34,8 +35,10 @@ class ReviewScreen extends StatelessWidget {
                   padding: EdgeInsets.all(16),
                   child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
                 )
-              else
-                IconButton(tooltip: 'Scan SMS now', icon: const Icon(Icons.refresh), onPressed: () => _scan(context)),
+              else ...[
+                IconButton(tooltip: 'Scan a date range', icon: const Icon(Icons.date_range), onPressed: () => scanRange(context)),
+                IconButton(tooltip: 'Scan new SMS', icon: const Icon(Icons.refresh), onPressed: () => _scan(context)),
+              ],
             ],
           ),
           body: RefreshIndicator(
@@ -48,7 +51,7 @@ class ReviewScreen extends StatelessWidget {
                     Text('All caught up', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 8),
                     Text(
-                      'New bank SMS show up here for you to confirm. Pull down or tap refresh to scan your messages.',
+                      'New bank SMS show up here for you to confirm. Pull down to scan new messages, or tap the calendar to scan a date range.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),

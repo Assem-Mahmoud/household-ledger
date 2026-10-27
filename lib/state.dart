@@ -40,6 +40,7 @@ class AppState extends ChangeNotifier {
     await _loadRules();
     await _loadPending();
     period = periodFor(DateTime.now(), cycleStartDay);
+    if (pending.isNotEmpty) await reparsePending(notify: false);
   }
 
   Future<void> _create(Database d, int version) async {
@@ -363,8 +364,31 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  /// Reads new SMS since the last scan and adds bank transactions to the review list.
-  Future<String> scanSms({DateTime? from}) async {
+  static String _normSender(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\u0600-\u06ff]'), '');
+
+  /// Flexible sender match: "AlRajhiBank", "alrajhi bank" and "AlRajhi" all match the same sender.
+  bool _senderIn(String sender, List<String> list) {
+    final s = _normSender(sender);
+    if (s.isEmpty) return false;
+    for (final e in list) {
+      final n = _normSender(e);
+      if (n.isNotEmpty && (s == n || s.contains(n))) return true;
+    }
+    return false;
+  }
+
+  /// Whether a message passes the sender filters and keyword rules. Returns the parse result if it does.
+  ParsedSms? _accept(String sender, String body) {
+    final allow = lines('senders');
+    if (_senderIn(sender, lines('blockedSenders'))) return null;
+    if (allow.isNotEmpty && !_senderIn(sender, allow)) return null;
+    if (allow.isEmpty && !looksLikeTransaction(body)) return null;
+    return parseSms(body, ignore: lines('ignoreKw'), income: lines('incomeKw'));
+  }
+
+  /// Reads SMS and adds bank transactions to the review list.
+  /// Without a range it continues from the last scan; with [from]/[to] it reads exactly that window.
+  Future<String> scanSms({DateTime? from, DateTime? to}) async {
     if (scanning) return '';
     scanning = true;
     notifyListeners();
@@ -373,18 +397,13 @@ class AppState extends ChangeNotifier {
       if (perm['sms'] != true) {
         return 'SMS access is off. Allow it when asked, or in Android Settings → Apps → Household Ledger → Permissions.';
       }
-      int since;
-      if (from != null) {
-        since = from.millisecondsSinceEpoch;
-      } else {
-        since = int.tryParse(settings['smsLastScan'] ?? '') ?? periodFor(DateTime.now(), cycleStartDay).start.millisecondsSinceEpoch;
-      }
-      final messages = await Native.readSms(since);
-      final allow = lines('senders');
-      final block = lines('blockedSenders');
-      final ignore = lines('ignoreKw');
-      final income = lines('incomeKw');
-      var added = 0;
+      final ranged = from != null || to != null;
+      final since = from != null
+          ? DateTime(from.year, from.month, from.day).millisecondsSinceEpoch - 1
+          : int.tryParse(settings['smsLastScan'] ?? '') ?? periodFor(DateTime.now(), cycleStartDay).start.millisecondsSinceEpoch;
+      final until = to != null ? DateTime(to.year, to.month, to.day, 23, 59, 59, 999).millisecondsSinceEpoch : null;
+      final messages = await Native.readSms(since, untilMillis: until);
+      var added = 0, matched = 0;
       var newest = int.tryParse(settings['smsLastScan'] ?? '') ?? 0;
 
       for (final msg in messages) {
@@ -392,12 +411,9 @@ class AppState extends ChangeNotifier {
         newest = max(newest, date);
         final sender = (msg['address'] ?? '').toString();
         final body = (msg['body'] ?? '').toString();
-        final s = sender.toLowerCase();
-        if (block.contains(s)) continue;
-        if (allow.isNotEmpty && !allow.contains(s)) continue;
-        if (allow.isEmpty && !looksLikeTransaction(body)) continue;
-        final parsed = parseSms(body, ignore: ignore, income: income);
+        final parsed = _accept(sender, body);
         if (parsed == null) continue;
+        matched++;
         final key = '$sender|$date';
         final exists = await db.query('sms_inbox', columns: ['id'], where: 'sms_key = ?', whereArgs: [key]);
         if (exists.isNotEmpty) continue;
@@ -408,16 +424,68 @@ class AppState extends ChangeNotifier {
         });
         added++;
       }
-      await setSetting('smsLastScan', '$newest', notify: false);
+      if (!ranged || until == null || until >= newest) {
+        await setSetting('smsLastScan', '$newest', notify: false);
+      }
       await _loadPending();
-      if (added == 0) return 'No new bank transactions found.';
-      return '$added new transaction${added == 1 ? '' : 's'} to review.';
+      final window = ranged
+          ? ' between ${from != null ? shortDate(from) : 'the start'} and ${to != null ? shortDate(to) : 'today'}'
+          : '';
+      if (added == 0) {
+        return matched == 0
+            ? 'No bank transactions found$window (${messages.length} messages checked).'
+            : 'No new transactions$window. $matched were already reviewed.';
+      }
+      return '$added new transaction${added == 1 ? '' : 's'} to review$window.';
     } catch (e) {
       return 'Could not read messages ($e).';
     } finally {
       scanning = false;
       notifyListeners();
     }
+  }
+
+  /// Re-reads waiting items with the current parser and filters (after a settings change or app update).
+  Future<void> reparsePending({bool notify = true}) async {
+    final rows = await db.query('sms_inbox', where: 'status = ?', whereArgs: ['pending']);
+    for (final r in rows) {
+      final it = SmsItem.fromMap(r);
+      final parsed = _accept(it.sender, it.body);
+      if (parsed == null) {
+        // no longer matches the filters: drop it so a later scan can pick it up again if filters change back
+        await db.delete('sms_inbox', where: 'id = ?', whereArgs: [it.id]);
+        continue;
+      }
+      await db.update('sms_inbox', {
+        'amount': parsed.amount, 'kind': parsed.kind, 'merchant': parsed.merchant,
+        'category_id': suggestCategory(parsed.merchant, it.body, parsed.kind),
+      }, where: 'id = ?', whereArgs: [it.id]);
+    }
+    await _loadPending();
+    if (notify) notifyListeners();
+  }
+
+  /// Called after any SMS setting changes: re-check the waiting list, then rescan the current period.
+  Future<String> applySmsSettings() async {
+    await reparsePending(notify: false);
+    final per = periodFor(DateTime.now(), cycleStartDay);
+    return scanSms(from: per.start, to: DateTime.now());
+  }
+
+  /// Senders with transaction-looking messages in the last [days] days, most active first.
+  Future<List<(String, int)>> detectSenders({int days = 120}) async {
+    final perm = await Native.requestPermissions(sms: true);
+    if (perm['sms'] != true) return [];
+    final since = DateTime.now().subtract(Duration(days: days)).millisecondsSinceEpoch;
+    final messages = await Native.readSms(since);
+    final counts = <String, int>{};
+    for (final m in messages) {
+      final sender = (m['address'] ?? '').toString();
+      if (sender.isEmpty) continue;
+      if (looksLikeTransaction((m['body'] ?? '').toString())) counts[sender] = (counts[sender] ?? 0) + 1;
+    }
+    final out = counts.entries.map((e) => (e.key, e.value)).toList()..sort((a, b) => b.$2.compareTo(a.$2));
+    return out;
   }
 
   Future<void> confirmSms(SmsItem it,

@@ -62,6 +62,28 @@ void main() {
       expect(p!.kind, 'expense');
     });
 
+    test('Al Rajhi POS purchase (screenshot)', () {
+      final p = parseSms('شراء عبر نقاط البيع\nبطاقة:1946 ;فيزا-سامسونج باي\nلدى:SAPAH ALF\nمبلغ:SAR 36\nرصيد:SAR 20441.22\n25/10/26 17:31');
+      expect(p!.amount, 36);
+      expect(p.kind, 'expense');
+      expect(p.merchant, 'SAPAH ALF');
+    });
+
+    test('Al Rajhi online purchase with tatweel and direction marks', () {
+      for (final body in [
+        'شراء إنترنت\nبـSR 5\nعبر:1946;فيزا\nلـEHSAN\nرصيد:SR 20436.22\n26/10/26 6:27',
+        'شراء إنترنت بـSR 5\nعبر1946;فيزا\nلـEHSAN\nرصيد:SR 20431.22\n6:28 26/10/26',
+        '\u200fشراء إنترنت\n\u200fبـ\u200eSR 5\n\u200fلـ\u200eEHSAN\n\u200fرصيد:SR 20436.22',
+      ]) {
+        final p = parseSms(body);
+        expect(p, isNotNull, reason: body);
+        expect(p!.amount, 5, reason: body);
+        expect(p.kind, 'expense');
+        expect(p.merchant, 'EHSAN', reason: body);
+        expect(looksLikeTransaction(body), isTrue);
+      }
+    });
+
     test('merchantKey', () {
       expect(merchantKey('LULU HYPER DAMMAM 123'), 'lulu hyper');
       expect(merchantKey('***'), '');
