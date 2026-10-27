@@ -39,13 +39,37 @@ jobs:
       - run: flutter pub get
 
       - name: Analyze
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos --no-fatal-warnings > analyze.txt 2>&1
+          code=$?
+          cat analyze.txt
+          if [ $code -ne 0 ]; then
+            grep -E "^ *error" analyze.txt | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+          fi
+          exit $code
 
       - name: Test SMS parser and periods
-        run: flutter test
+        run: |
+          set +e
+          flutter test > test.txt 2>&1
+          code=$?
+          cat test.txt
+          if [ $code -ne 0 ]; then
+            grep -E "Expected|Actual|\[E\]|Error" test.txt | head -30 | while IFS= read -r line; do echo "::error::$line"; done
+          fi
+          exit $code
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          set +e
+          flutter build apk --release > build.txt 2>&1
+          code=$?
+          cat build.txt
+          if [ $code -ne 0 ]; then
+            grep -E "^e: |error:|Error:|What went wrong" -A2 build.txt | head -30 | while IFS= read -r line; do echo "::error::$line"; done
+          fi
+          exit $code
 
       - name: Upload APK (Actions artifact)
         uses: actions/upload-artifact@v4
