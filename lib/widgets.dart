@@ -29,8 +29,11 @@ Color levelColor(String level, BuildContext ctx) {
 class PeriodSwitcher extends StatelessWidget {
   const PeriodSwitcher({super.key});
 
+  // Listens to the app itself: it is used as a const widget, which parents never rebuild.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(listenable: app, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final per = app.period;
     return Row(
       mainAxisSize: MainAxisSize.min,

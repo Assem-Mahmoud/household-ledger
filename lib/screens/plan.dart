@@ -315,7 +315,9 @@ class PlanCard extends StatelessWidget {
   const PlanCard({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(listenable: app, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final per = app.period;
     final lines = app.planFor(per);
     final cs = Theme.of(context).colorScheme;
