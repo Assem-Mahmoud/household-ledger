@@ -99,26 +99,34 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
 
-                // Summary
+                // Summary: a small statement that adds up, top to bottom
                 SectionCard(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Eyebrow('Net cash flow'),
-                    const SizedBox(height: 4),
-                    Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 10, runSpacing: 6, children: [
-                      Text(fmt(s.net),
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w600, fontFeatures: tabular,
-                              color: s.net < 0 ? badColor : cs.onSurface)),
-                      Text(app.currency, style: TextStyle(color: cs.onSurfaceVariant)),
-                      if (rate != null)
-                        Pill('${(rate * 100).round()}% saved', rate >= 0.2 ? goodColor : rate >= 0.05 ? warnColor : badColor),
-                    ]),
-                    const SizedBox(height: 14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     Row(children: [
-                      _stat(context, 'Income', s.income, cs.primary),
-                      _stat(context, 'Spending', s.spend, spendColor),
-                      _stat(context, 'Saved', s.save, cs.onSurface),
+                      const Expanded(child: Eyebrow('This month')),
+                      if (rate != null)
+                        Pill('${(rate * 100).round()}% of income not spent',
+                            rate >= 0.2 ? goodColor : rate >= 0.05 ? warnColor : badColor),
                     ]),
+                    const SizedBox(height: 10),
+                    _line(context, 'Income', s.income, cs.primary, bold: true),
+                    _line(context, 'Spending', -s.spend, spendColor),
+                    const Divider(height: 14),
+                    _line(context, 'Left after spending', s.net, s.net < 0 ? badColor : cs.onSurface, bold: true),
+                    if (s.save > 0) ...[
+                      _line(context, 'Moved to savings', -s.save, cs.onSurfaceVariant),
+                      const Divider(height: 14),
+                      _line(context, 'Remaining', s.net - s.save, s.net - s.save < 0 ? warnColor : cs.onSurface, bold: true),
+                      if (s.net - s.save < -0.5)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'You moved ${fmt(s.save - s.net)} more to savings than this month left over, '
+                            'using money already in your account.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                        ),
+                    ],
                   ]),
                 ),
 
@@ -201,13 +209,13 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _stat(BuildContext context, String label, double v, Color color) => Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Eyebrow(label),
-          const SizedBox(height: 2),
-          Text(fmt(v),
+  Widget _line(BuildContext context, String label, double v, Color color, {bool bold = false}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(children: [
+          Expanded(child: Text(label, style: TextStyle(fontWeight: bold ? FontWeight.w600 : FontWeight.w400))),
+          Text('${v < 0 ? '−' : ''}${fmt(v.abs())} ${app.currency}',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: color, fontWeight: FontWeight.w600, fontFeatures: tabular)),
+                  color: color, fontWeight: bold ? FontWeight.w700 : FontWeight.w500, fontFeatures: tabular)),
         ]),
       );
 
