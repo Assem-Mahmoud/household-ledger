@@ -160,3 +160,92 @@ class Insight {
   final String text;
   const Insight(this.level, this.text);
 }
+
+/// A monthly plan item: a bill to pay or an amount to set aside.
+/// Recurring items have no [onlyPeriod]; one-off items belong to a single period.
+class PlanItem {
+  int id;
+  String title;
+  String kind; // 'pay' | 'save'
+  double amount;
+  int? dueDay; // 1–31, null = any time in the month
+  int? categoryId; // when set, spending in this category ticks the item automatically
+  String startPeriod; // first period key it applies to
+  String? endPeriod; // last period key (inclusive) after it was stopped
+  String? onlyPeriod; // one-off item for this period only
+  int sort;
+
+  PlanItem({
+    required this.id,
+    required this.title,
+    required this.kind,
+    required this.amount,
+    this.dueDay,
+    this.categoryId,
+    required this.startPeriod,
+    this.endPeriod,
+    this.onlyPeriod,
+    this.sort = 0,
+  });
+
+  bool get recurring => onlyPeriod == null;
+
+  bool appliesTo(String key) {
+    if (onlyPeriod != null) return onlyPeriod == key;
+    if (key.compareTo(startPeriod) < 0) return false;
+    if (endPeriod != null && key.compareTo(endPeriod!) > 0) return false;
+    return true;
+  }
+
+  factory PlanItem.fromMap(Map<String, Object?> m) => PlanItem(
+        id: m['id'] as int,
+        title: m['title'] as String,
+        kind: (m['kind'] as String?) ?? 'pay',
+        amount: (m['amount'] as num?)?.toDouble() ?? 0,
+        dueDay: m['due_day'] as int?,
+        categoryId: m['category_id'] as int?,
+        startPeriod: (m['start_period'] as String?) ?? '2000-01',
+        endPeriod: m['end_period'] as String?,
+        onlyPeriod: m['only_period'] as String?,
+        sort: (m['sort'] as int?) ?? 0,
+      );
+
+  Map<String, Object?> toMap() => {
+        'title': title,
+        'kind': kind,
+        'amount': amount,
+        'due_day': dueDay,
+        'category_id': categoryId,
+        'start_period': startPeriod,
+        'end_period': endPeriod,
+        'only_period': onlyPeriod,
+        'sort': sort,
+      };
+}
+
+/// One plan item in one period, with its progress.
+class PlanLine {
+  final PlanItem item;
+  final double target; // this period's amount (override or item amount)
+  final double progress; // auto progress from the linked category
+  final bool manualDone;
+  final bool overridden;
+  final DateTime? due;
+
+  PlanLine(this.item, this.target, this.progress, this.manualDone, this.overridden, this.due);
+
+  bool get autoDone => item.categoryId != null && target > 0 && progress >= target - 0.01;
+  bool get done => manualDone || autoDone;
+  double get remaining => done ? 0 : (target - progress).clamp(0, double.infinity).toDouble();
+
+  /// 'done' | 'overdue' | 'due' (within 3 days) | 'open'
+  String get status {
+    if (done) return 'done';
+    if (due == null) return 'open';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (today.isAfter(due!)) return 'overdue';
+    if (due!.difference(today).inDays <= 3) return 'due';
+    return 'open';
+  }
+}

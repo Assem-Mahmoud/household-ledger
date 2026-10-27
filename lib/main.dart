@@ -59,8 +59,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && app.flag('smsOn')) {
-      app.scanSms();
+    if (state == AppLifecycleState.resumed) {
+      app.checkPlanReminders();
+      if (app.flag('smsOn')) app.scanSms();
     }
   }
 
@@ -91,6 +92,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       }
     }
     await app.applyReminder();
+    await app.checkPlanReminders();
     if (app.flag('smsOn')) {
       final msg = await app.scanSms();
       if (mounted && msg.isNotEmpty && app.pending.isNotEmpty) {
@@ -123,7 +125,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
               ),
               const NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Entries'),
               const NavigationDestination(icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights), label: 'Analytics'),
-              const NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Budget'),
+              const NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Plan'),
             ],
           ),
         ),

@@ -23,7 +23,9 @@ class ReviewScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: app,
       builder: (context, _) {
-        final items = app.pending;
+        final items = app.visiblePending;
+        final window = app.reviewWindow;
+        final hidden = app.pending.length - items.length;
         final suggested = items.where((i) => i.categoryId != null).length;
         final cs = Theme.of(context).colorScheme;
         return Scaffold(
@@ -43,44 +45,87 @@ class ReviewScreen extends StatelessWidget {
           ),
           body: RefreshIndicator(
             onRefresh: () => _scan(context),
-            child: items.isEmpty
-                ? ListView(padding: const EdgeInsets.all(24), children: [
-                    const SizedBox(height: 40),
-                    Icon(Icons.task_alt, size: 56, color: cs.primary),
-                    const SizedBox(height: 16),
-                    Text('All caught up', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 8),
-                    Text(
-                      'New bank SMS show up here for you to confirm. Pull down to scan new messages, or tap the calendar to scan a date range.',
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 32),
+              children: [
+                if (window != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                      InputChip(
+                        avatar: const Icon(Icons.filter_alt_outlined, size: 18),
+                        label: Text('${shortDate(window.$1)} – ${shortDate(window.$2)}'),
+                        onDeleted: app.clearReviewWindow,
+                      ),
+                      if (hidden > 0)
+                        Text('$hidden more outside this range',
+                            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5)),
+                    ]),
+                  ),
+                if (items.isEmpty) ...[
+                  const SizedBox(height: 48),
+                  Icon(Icons.task_alt, size: 56, color: cs.primary),
+                  const SizedBox(height: 16),
+                  Text(window != null ? 'Nothing waiting in this range' : 'All caught up',
+                      textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      app.smsStartDate != null
+                          ? 'Bank SMS from ${shortDate(app.smsStartDate!)} onwards show up here. Pull down to scan new messages.'
+                          : 'New bank SMS show up here for you to confirm. Pull down to scan new messages, or tap the calendar to scan a date range.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
-                  ])
-                : ListView(
-                    padding: const EdgeInsets.only(bottom: 32),
-                    children: [
-                      if (suggested > 1)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                          child: FilledButton.tonalIcon(
-                            icon: const Icon(Icons.done_all),
-                            label: Text('Confirm $suggested with suggested categories'),
-                            onPressed: () async {
-                              final n = await app.confirmAllSuggested();
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Confirmed $n entries.')));
-                              }
-                            },
-                          ),
-                        ),
-                      for (final it in items) ReviewCard(key: ValueKey(it.id), item: it),
-                    ],
                   ),
+                ] else ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: Wrap(spacing: 8, runSpacing: 8, children: [
+                      if (suggested > 1)
+                        FilledButton.tonalIcon(
+                          icon: const Icon(Icons.done_all),
+                          label: Text('Confirm $suggested suggested'),
+                          onPressed: () async {
+                            final n = await app.confirmAllSuggested(only: items);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Confirmed $n entries.')));
+                            }
+                          },
+                        ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.clear_all),
+                        label: Text('Ignore all ${items.length}'),
+                        onPressed: () => _ignoreAll(context, items),
+                      ),
+                    ]),
+                  ),
+                  for (final it in items) ReviewCard(key: ValueKey(it.id), item: it),
+                ],
+              ],
+            ),
           ),
         );
       },
     );
   }
+}
+
+Future<void> _ignoreAll(BuildContext context, List<SmsItem> items) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text('Ignore ${items.length} message${items.length == 1 ? '' : 's'}?'),
+      content: const Text('They leave the Review list and are not added to your entries. '
+          'Use this when imported statements already cover these days.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Ignore all')),
+      ],
+    ),
+  );
+  if (ok == true) await app.ignoreMany(items);
 }
 
 class ReviewCard extends StatefulWidget {

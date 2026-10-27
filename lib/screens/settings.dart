@@ -98,6 +98,14 @@ class SettingsScreen extends StatelessWidget {
                   : null,
             ),
             ListTile(
+              title: const Text('SMS start date'),
+              subtitle: Text(app.smsStartDate == null
+                  ? 'Off · every message can be read'
+                  : 'Only messages from ${shortDate(app.smsStartDate!)} ${app.smsStartDate!.year} on. Earlier days come from imported statements.'),
+              trailing: const Icon(Icons.start),
+              onTap: () => _smsStart(context),
+            ),
+            ListTile(
               title: const Text('Scan a date range'),
               subtitle: const Text('Read messages between two dates. Already reviewed ones are skipped.'),
               trailing: const Icon(Icons.date_range),
@@ -304,6 +312,58 @@ class SettingsScreen extends StatelessWidget {
         );
       }),
     );
+  }
+
+  Future<void> _smsStart(BuildContext context) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(
+            title: Text('Start fresh with SMS', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text('Messages before the start date are ignored and cleared from Review. '
+                'Use it when statements (CSV) already cover the past, so nothing is counted twice.'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.today),
+            title: const Text('Start from today'),
+            onTap: () => Navigator.pop(c, 'today'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.event),
+            title: const Text('Pick a start date'),
+            subtitle: const Text('e.g. the day after your last imported statement'),
+            onTap: () => Navigator.pop(c, 'pick'),
+          ),
+          if (app.smsStartDate != null)
+            ListTile(
+              leading: const Icon(Icons.restart_alt),
+              title: const Text('Turn off the start date'),
+              onTap: () => Navigator.pop(c, 'off'),
+            ),
+        ]),
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    DateTime? date;
+    if (choice == 'today') date = DateTime.now();
+    if (choice == 'pick') {
+      date = await showDatePicker(
+        context: context,
+        initialDate: DateTime.now(),
+        firstDate: DateTime(2018),
+        lastDate: DateTime.now(),
+        helpText: 'Read SMS from this day on',
+      );
+      if (date == null) return;
+    }
+    final cleared = await app.setSmsStartDate(date);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(date == null
+          ? 'Start date turned off.'
+          : 'SMS are read from ${shortDate(date)} on.${cleared > 0 ? ' $cleared older messages cleared from Review.' : ''}'),
+    ));
   }
 
   Future<void> _restore(BuildContext context) async {
@@ -601,20 +661,20 @@ Future<void> rescanAfterChange(BuildContext context) async {
 Future<void> scanRange(BuildContext context) async {
   final now = DateTime.now();
   final per = app.period;
+  final first = app.smsStartDate ?? DateTime(2018);
+  if (first.isAfter(now)) return;
+  DateTime clamp(DateTime d) => d.isBefore(first) ? first : (d.isAfter(now) ? now : d);
   final range = await showDateRangePicker(
     context: context,
-    firstDate: DateTime(2018),
+    firstDate: DateTime(first.year, first.month, first.day),
     lastDate: now,
-    initialDateRange: DateTimeRange(
-      start: per.start.isAfter(now) ? now : per.start,
-      end: per.end.isAfter(now) ? now : per.end,
-    ),
+    initialDateRange: DateTimeRange(start: clamp(per.start), end: clamp(per.end)),
     helpText: 'Scan SMS from – to',
     saveText: 'Scan',
   );
   if (range == null || !context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
-  final msg = await app.scanSms(from: range.start, to: range.end);
+  final msg = await app.scanSms(from: range.start, to: range.end, filterReview: true);
   if (msg.isNotEmpty) messenger.showSnackBar(SnackBar(content: Text(msg)));
 }
 

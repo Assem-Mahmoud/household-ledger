@@ -29,19 +29,35 @@ class AppState extends ChangeNotifier {
   /// Bottom-navigation index, so any screen can jump to another tab.
   final tab = ValueNotifier<int>(0);
 
+  /// Sub-tab of the Budget screen: 0 this period, 1 plan, 2 template.
+  final budgetTab = ValueNotifier<int>(0);
+
   // ---------------------------------------------------------------- setup
 
   Future<void> init() async {
     final path = p.join(await getDatabasesPath(), 'ledger.db');
-    db = await openDatabase(path, version: 1, onCreate: _create);
+    db = await openDatabase(path, version: 2, onCreate: _create, onUpgrade: (d, from, to) async {
+      if (from < 2) await _createPlanTables(d);
+    });
     await _loadSettings();
     await _loadCategories();
     await _loadTxns();
     await _loadOverrides();
     await _loadRules();
     await _loadPending();
+    await _loadPlans();
     period = periodFor(DateTime.now(), cycleStartDay);
     if (pending.isNotEmpty) await reparsePending(notify: false);
+  }
+
+  Future<void> _createPlanTables(Database d) async {
+    await d.execute('''CREATE TABLE IF NOT EXISTS plan_items(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, kind TEXT NOT NULL, amount REAL NOT NULL,
+      due_day INTEGER, category_id INTEGER, start_period TEXT NOT NULL, end_period TEXT, only_period TEXT,
+      sort INTEGER NOT NULL DEFAULT 0)''');
+    await d.execute('''CREATE TABLE IF NOT EXISTS plan_status(
+      period TEXT NOT NULL, item_id INTEGER NOT NULL, done INTEGER NOT NULL DEFAULT 0, amount REAL,
+      PRIMARY KEY(period, item_id))''');
   }
 
   Future<void> _create(Database d, int version) async {
@@ -67,6 +83,7 @@ class AppState extends ChangeNotifier {
     await d.execute('''CREATE TABLE alerts(
       period TEXT NOT NULL, scope TEXT NOT NULL, level INTEGER NOT NULL,
       PRIMARY KEY(period, scope, level))''');
+    await _createPlanTables(d);
 
     final ids = <String, int>{};
     for (var i = 0; i < seedCategories.length; i++) {
@@ -391,7 +408,7 @@ class AppState extends ChangeNotifier {
 
   /// Reads SMS and adds bank transactions to the review list.
   /// Without a range it continues from the last scan; with [from]/[to] it reads exactly that window.
-  Future<String> scanSms({DateTime? from, DateTime? to}) async {
+  Future<String> scanSms({DateTime? from, DateTime? to, bool filterReview = false}) async {
     if (scanning) return '';
     scanning = true;
     notifyListeners();
@@ -401,10 +418,21 @@ class AppState extends ChangeNotifier {
         return 'SMS access is off. Allow it when asked, or in Android Settings → Apps → Household Ledger → Permissions.';
       }
       final ranged = from != null || to != null;
-      final since = from != null
+      var since = from != null
           ? DateTime(from.year, from.month, from.day).millisecondsSinceEpoch - 1
           : int.tryParse(settings['smsLastScan'] ?? '') ?? periodFor(DateTime.now(), cycleStartDay).start.millisecondsSinceEpoch;
       final until = to != null ? DateTime(to.year, to.month, to.day, 23, 59, 59, 999).millisecondsSinceEpoch : null;
+      if (filterReview && ranged) reviewWindow = (from ?? DateTime(2000), to ?? DateTime.now());
+      // Messages before the SMS start date are never read (statements/CSV cover that time).
+      final start = smsStartDate;
+      if (start != null) {
+        final cut = start.millisecondsSinceEpoch - 1;
+        if (until != null && until <= cut) {
+          return 'SMS before ${shortDate(start)} ${start.year} are switched off, because imported statements cover that time. '
+              'Change it in Settings → SMS start date.';
+        }
+        since = max(since, cut);
+      }
       final messages = await Native.readSms(since, untilMillis: until);
       var added = 0, matched = 0, linked = 0;
       var newest = int.tryParse(settings['smsLastScan'] ?? '') ?? 0;
@@ -484,6 +512,48 @@ class AppState extends ChangeNotifier {
     return r['category_id'] as int;
   }
 
+  /// Date range of the last manual range scan; Review shows only items in it until cleared.
+  (DateTime, DateTime)? reviewWindow;
+
+  void clearReviewWindow() {
+    reviewWindow = null;
+    notifyListeners();
+  }
+
+  List<SmsItem> get visiblePending {
+    final w = reviewWindow;
+    if (w == null) return pending;
+    final a = DateTime(w.$1.year, w.$1.month, w.$1.day).millisecondsSinceEpoch;
+    final b = DateTime(w.$2.year, w.$2.month, w.$2.day, 23, 59, 59, 999).millisecondsSinceEpoch;
+    return pending.where((p) => p.receivedAt >= a && p.receivedAt <= b).toList();
+  }
+
+  /// SMS received before this date are ignored. Null means no cut-off.
+  DateTime? get smsStartDate {
+    final ms = int.tryParse(settings['smsStartFrom'] ?? '');
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  /// Start fresh: ignore every SMS before [from] (and clear them from Review); scanning continues from there.
+  Future<int> setSmsStartDate(DateTime? from) async {
+    if (from == null) {
+      await setSetting('smsStartFrom', '', notify: false);
+      notifyListeners();
+      return 0;
+    }
+    final start = DateTime(from.year, from.month, from.day);
+    final ms = start.millisecondsSinceEpoch;
+    final n = await db.update('sms_inbox', {'status': 'ignored'},
+        where: 'status = ? AND received_at < ?', whereArgs: ['pending', ms]);
+    await setSetting('smsStartFrom', '$ms', notify: false);
+    final last = int.tryParse(settings['smsLastScan'] ?? '') ?? 0;
+    if (last < ms) await setSetting('smsLastScan', '${ms - 1}', notify: false);
+    reviewWindow = null;
+    await _loadPending();
+    notifyListeners();
+    return n;
+  }
+
   /// Waiting SMS that match an existing (imported or manual) entry are linked to it and leave the review list.
   Future<int> _linkPendingToEntries() async {
     final rows = await db.query('sms_inbox', where: 'status = ?', whereArgs: ['pending']);
@@ -521,6 +591,7 @@ class AppState extends ChangeNotifier {
   /// Called after any SMS setting changes: re-check the waiting list, then rescan the current period.
   Future<String> applySmsSettings() async {
     await reparsePending(notify: false);
+    reviewWindow = null;
     final per = periodFor(DateTime.now(), cycleStartDay);
     return scanSms(from: per.start, to: DateTime.now());
   }
@@ -572,9 +643,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<int> confirmAllSuggested() async {
+  Future<void> ignoreMany(List<SmsItem> items) async {
+    final batch = db.batch();
+    for (final it in items) {
+      batch.update('sms_inbox', {'status': 'ignored'}, where: 'id = ?', whereArgs: [it.id]);
+    }
+    await batch.commit(noResult: true);
+    await _loadPending();
+    notifyListeners();
+  }
+
+  Future<int> confirmAllSuggested({List<SmsItem>? only}) async {
     var n = 0;
-    for (final it in List<SmsItem>.from(pending)) {
+    for (final it in List<SmsItem>.from(only ?? pending)) {
       if (it.categoryId == null || cat(it.categoryId!) == null) continue;
       await confirmSms(it,
           amount: it.amount, kind: it.kind, categoryId: it.categoryId!, merchant: it.merchant,
@@ -679,9 +760,119 @@ class AppState extends ChangeNotifier {
     return '${parts.join(', ')}.';
   }
 
+  // ------------------------------------------------------------ monthly plan
+
+  List<PlanItem> planItems = [];
+  Map<String, Map<int, (bool, double?)>> planStatus = {};
+
+  Future<void> _loadPlans() async {
+    planItems = (await db.query('plan_items', orderBy: 'sort, id')).map(PlanItem.fromMap).toList();
+    planStatus = {};
+    for (final r in await db.query('plan_status')) {
+      planStatus.putIfAbsent(r['period'] as String, () => {})[r['item_id'] as int] =
+          (((r['done'] as int?) ?? 0) == 1, (r['amount'] as num?)?.toDouble());
+    }
+  }
+
+  DateTime? _dueDate(Period per, int? day) {
+    if (day == null) return null;
+    // the due day falls inside the period (handles salary-to-salary periods)
+    var d = DateTime(per.start.year, per.start.month, day);
+    if (d.isBefore(per.start)) d = DateTime(per.start.year, per.start.month + 1, day);
+    if (d.isAfter(per.end)) d = per.end;
+    return d;
+  }
+
+  List<PlanLine> planFor(Period per) {
+    final st = planStatus[per.key] ?? {};
+    final s = statsFor(per);
+    final out = <PlanLine>[];
+    for (final it in planItems.where((i) => i.appliesTo(per.key))) {
+      final status = st[it.id];
+      final target = status?.$2 ?? it.amount;
+      var progress = 0.0;
+      if (it.categoryId != null) {
+        for (final t in s.list) {
+          if (t.categoryId == it.categoryId && t.kind == 'expense') progress += t.amount;
+        }
+      }
+      out.add(PlanLine(it, target, progress, status?.$1 ?? false, status?.$2 != null, _dueDate(per, it.dueDay)));
+    }
+    out.sort((a, b) {
+      if (a.done != b.done) return a.done ? 1 : -1;
+      final ad = a.due, bd = b.due;
+      if (ad != null && bd != null) return ad.compareTo(bd);
+      if (ad != null) return -1;
+      if (bd != null) return 1;
+      return a.item.sort.compareTo(b.item.sort);
+    });
+    return out;
+  }
+
+  double planTotal(Period per) => planFor(per).fold(0.0, (a, l) => a + l.target);
+
+  Future<void> _setStatus(Period per, int itemId, {bool? done, double? amount, bool clearAmount = false}) async {
+    final cur = planStatus[per.key]?[itemId];
+    final newDone = done ?? cur?.$1 ?? false;
+    final newAmount = clearAmount ? null : (amount ?? cur?.$2);
+    await db.insert('plan_status', {'period': per.key, 'item_id': itemId, 'done': newDone ? 1 : 0, 'amount': newAmount},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _loadPlans();
+    notifyListeners();
+  }
+
+  Future<void> setPlanDone(Period per, PlanItem it, bool done) => _setStatus(per, it.id, done: done);
+
+  Future<void> setPlanAmountForPeriod(Period per, PlanItem it, double? amount) =>
+      _setStatus(per, it.id, amount: amount, clearAmount: amount == null);
+
+  Future<void> savePlanItem(PlanItem it) async {
+    if (it.id == 0) {
+      it.sort = planItems.isEmpty ? 0 : planItems.map((e) => e.sort).reduce(max) + 1;
+      it.id = await db.insert('plan_items', it.toMap());
+    } else {
+      await db.update('plan_items', it.toMap(), where: 'id = ?', whereArgs: [it.id]);
+    }
+    await _loadPlans();
+    notifyListeners();
+  }
+
+  /// One-off items are deleted. Recurring items stop after the previous period, so past months keep their history.
+  Future<void> removePlanItem(PlanItem it, Period from) async {
+    if (!it.recurring || from.key.compareTo(it.startPeriod) <= 0) {
+      await db.delete('plan_items', where: 'id = ?', whereArgs: [it.id]);
+      await db.delete('plan_status', where: 'item_id = ?', whereArgs: [it.id]);
+    } else {
+      it.endPeriod = from.prev.key;
+      await db.update('plan_items', it.toMap(), where: 'id = ?', whereArgs: [it.id]);
+    }
+    await _loadPlans();
+    notifyListeners();
+  }
+
+  /// Reminds once per period about plan items that are due today or overdue.
+  Future<void> checkPlanReminders() async {
+    final per = periodFor(DateTime.now(), cycleStartDay);
+    for (final l in planFor(per)) {
+      if (l.done || (l.status != 'overdue' && l.due == null)) continue;
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      if (l.due == null || l.due!.isAfter(today)) continue;
+      final scope = 'plan${l.item.id}';
+      final seen = await db.query('alerts', where: 'period = ? AND scope = ?', whereArgs: [per.key, scope]);
+      if (seen.isNotEmpty) continue;
+      await db.insert('alerts', {'period': per.key, 'scope': scope, 'level': 1});
+      final verb = l.item.kind == 'save' ? 'Set aside' : 'Pay';
+      await Native.notify(30000 + l.item.id, '$verb: ${l.item.title}',
+          '${fmt(l.remaining > 0 ? l.remaining : l.target)} $currency ${l.due!.isBefore(today) ? 'was due on ${shortDate(l.due!)}' : 'is due today'}. Tick it in your plan once done.');
+    }
+  }
+
   // ------------------------------------------------------- backup / restore
 
-  static const _backupTables = ['categories', 'txns', 'budget_overrides', 'sms_inbox', 'rules', 'settings', 'alerts'];
+  static const _backupTables = [
+    'categories', 'txns', 'budget_overrides', 'sms_inbox', 'rules', 'settings', 'alerts', 'plan_items', 'plan_status',
+  ];
 
   Future<String> backupJson() async {
     final data = <String, Object?>{
@@ -757,6 +948,7 @@ class AppState extends ChangeNotifier {
     await _loadOverrides();
     await _loadRules();
     await _loadPending();
+    await _loadPlans();
     period = periodFor(DateTime.now(), cycleStartDay);
     await applyReminder();
     notifyListeners();

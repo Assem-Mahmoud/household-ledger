@@ -6,6 +6,7 @@ import '../state.dart';
 import '../stats.dart';
 import '../widgets.dart';
 import 'entry_form.dart';
+import 'plan.dart';
 import 'settings.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -121,10 +122,17 @@ class HomeScreen extends StatelessWidget {
                   ]),
                 ),
 
+                const PlanCard(),
+
                 // Budget overview
                 SectionCard(
                   title: 'Budget',
-                  trailing: TextButton(onPressed: () => app.tab.value = 4, child: const Text('Manage')),
+                  trailing: TextButton(
+                      onPressed: () {
+                        app.budgetTab.value = 0;
+                        app.tab.value = 4;
+                      },
+                      child: const Text('Manage')),
                   child: total <= 0
                       ? Text('No budgets set. Set a monthly template once and every month follows it.',
                           style: TextStyle(color: cs.onSurfaceVariant))

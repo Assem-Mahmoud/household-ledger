@@ -5,24 +5,49 @@ import '../models.dart';
 import '../state.dart';
 import '../stats.dart';
 import '../widgets.dart';
+import 'plan.dart';
 
-/// Two views of the same numbers:
-///  - This month: what applies now (template value unless changed for this month only)
-///  - Template: the default every month inherits
-class BudgetScreen extends StatelessWidget {
+/// Three views:
+///  - This period: limits that apply now (template value unless changed for this period only)
+///  - Plan: monthly checklist of bills to pay and amounts to save
+///  - Template: the default limits every period inherits
+class BudgetScreen extends StatefulWidget {
   const BudgetScreen({super.key});
+  @override
+  State<BudgetScreen> createState() => _BudgetScreenState();
+}
+
+class _BudgetScreenState extends State<BudgetScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(length: 3, vsync: this, initialIndex: app.budgetTab.value);
+
+  void _follow() {
+    if (_tabs.index != app.budgetTab.value) _tabs.animateTo(app.budgetTab.value);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    app.budgetTab.addListener(_follow);
+    _tabs.addListener(() {
+      if (!_tabs.indexIsChanging) app.budgetTab.value = _tabs.index;
+    });
+  }
+
+  @override
+  void dispose() {
+    app.budgetTab.removeListener(_follow);
+    _tabs.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Budget'),
-          bottom: const TabBar(tabs: [Tab(text: 'This period'), Tab(text: 'Template')]),
-        ),
-        body: const TabBarView(children: [_MonthTab(), _TemplateTab()]),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Budget & plan'),
+        bottom: TabBar(controller: _tabs, tabs: const [Tab(text: 'This period'), Tab(text: 'Plan'), Tab(text: 'Template')]),
       ),
+      body: TabBarView(controller: _tabs, children: const [_MonthTab(), PlanTab(), _TemplateTab()]),
     );
   }
 }
