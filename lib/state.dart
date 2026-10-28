@@ -12,6 +12,7 @@ import 'models.dart';
 import 'native.dart';
 import 'periods.dart';
 import 'sms_parser.dart';
+import 'sms_template.dart';
 import 'stats.dart';
 
 final app = AppState();
