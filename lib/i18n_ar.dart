@@ -361,6 +361,7 @@ const arabic = <String, String>{
   "The category is remembered for this merchant next time.": "سيتم تذكّر الفئة لهذا التاجر في المرة القادمة.",
   "The header needs at least \"date\" and \"amount\" columns.": "يجب أن يحتوي سطر العناوين على عمودي \"date\" و\"amount\" على الأقل.",
   "They leave the Review list and are not added to your entries. Use this when imported statements already cover these days.": "ستُزال من قائمة المراجعة ولن تُضاف إلى قيودك. استخدم هذا عندما تغطي الكشوفات المستوردة هذه الأيام.",
+  "This amount is in {c}. Edit it to the riyal amount charged before confirming.": "هذا المبلغ بعملة {c}. عدّله إلى المبلغ المخصوم بالريال قبل التأكيد.",
   "This decides how totals, budgets and the plan are grouped.": "يحدد هذا طريقة تجميع الإجماليات والميزانيات والخطة.",
   "This file is not a Household Ledger backup.": "هذا الملف ليس نسخة احتياطية من دفتر المنزل.",
   "This month": "هذا الشهر",

@@ -4,6 +4,7 @@ import '../format.dart';
 import '../i18n.dart';
 import '../models.dart';
 import '../periods.dart';
+import '../sms_parser.dart' show foreignCurrency;
 import '../state.dart';
 import '../widgets.dart';
 import 'settings.dart' show scanRange;
@@ -254,6 +255,21 @@ class _ReviewCardState extends State<ReviewCard> {
               const Expanded(
                 child: T('Looks like a card payment or a transfer between your own accounts. These aren\'t spending — tap Ignore.',
                     style: TextStyle(fontSize: 12.5)),
+              ),
+            ]),
+          ),
+        ],
+        if (foreignCurrency(widget.item.body) case final fx?) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(color: warnColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+            child: Row(children: [
+              const Icon(Icons.currency_exchange, size: 18, color: warnColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(tr('This amount is in {c}. Edit it to the riyal amount charged before confirming.', {'c': fx}),
+                    style: const TextStyle(fontSize: 12.5)),
               ),
             ]),
           ),
