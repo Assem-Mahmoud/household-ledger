@@ -458,6 +458,7 @@ class AppState extends ChangeNotifier {
       }
       final messages = await Native.readSms(since, untilMillis: until);
       var added = 0, matched = 0, linked = 0;
+      final autoAdded = <Txn>[];
       var newest = int.tryParse(settings['smsLastScan'] ?? '') ?? 0;
 
       for (final msg in messages) {
@@ -482,6 +483,21 @@ class AppState extends ChangeNotifier {
           linked++;
           continue;
         }
+        // A merchant you've already categorised goes straight into your entries.
+        final known = autoConfirm ? learnedCategory(parsed.merchant, parsed.kind) : null;
+        if (known != null) {
+          final t = Txn(kind: parsed.kind, amount: parsed.amount, categoryId: known,
+              date: isoDate(DateTime.fromMillisecondsSinceEpoch(date)), merchant: parsed.merchant,
+              source: 'sms', smsKey: key);
+          await db.insert('txns', t.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
+          await db.insert('sms_inbox', {
+            'sms_key': key, 'sender': sender, 'body': body, 'received_at': date,
+            'amount': parsed.amount, 'kind': parsed.kind, 'merchant': parsed.merchant, 'status': 'confirmed',
+            'category_id': known,
+          });
+          autoAdded.add(t);
+          continue;
+        }
         await db.insert('sms_inbox', {
           'sms_key': key, 'sender': sender, 'body': body, 'received_at': date,
           'amount': parsed.amount, 'kind': parsed.kind, 'merchant': parsed.merchant, 'status': 'pending',
@@ -493,13 +509,19 @@ class AppState extends ChangeNotifier {
         await setSetting('smsLastScan', '$newest', notify: false);
       }
       await _loadPending();
-      if (linked > 0) await _loadTxns();
+      if (linked > 0 || autoAdded.isNotEmpty) await _loadTxns();
+      for (final t in autoAdded) {
+        await checkAlerts(t);
+      }
       final window = ranged
           ? ' ${tr('between {a} and {b}', {'a': from != null ? shortDate(from) : tr('the start'), 'b': to != null ? shortDate(to) : tr('today')})}'
           : '';
-      final linkNote = linked > 0
+      var linkNote = linked > 0
           ? ' ${tr('{n} matched entries you already had, so they weren\'t added again.', {'n': linked})}'
           : '';
+      if (autoAdded.isNotEmpty) {
+        linkNote += ' ${tr('{n} from merchants you\'ve categorised were added automatically.', {'n': autoAdded.length})}';
+      }
       if (added == 0) {
         return matched == 0
             ? tr('No bank transactions found{w} ({n} messages checked).', {'w': window, 'n': messages.length})
@@ -638,7 +660,8 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
-  Future<void> confirmSms(SmsItem it,
+  /// Confirms one SMS. Returns how many other waiting SMS from the same merchant were added automatically.
+  Future<int> confirmSms(SmsItem it,
       {required double amount,
       required String kind,
       required int categoryId,
@@ -650,11 +673,12 @@ class AppState extends ChangeNotifier {
         merchant: merchant.trim(), note: note.trim(), source: 'sms', smsKey: it.smsKey);
     await db.insert('txns', t.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
     await db.update('sms_inbox', {'status': 'confirmed', 'category_id': categoryId}, where: 'id = ?', whereArgs: [it.id]);
-    if (remember) await learnRule(merchant, categoryId, notify: false);
+    final others = remember ? await learnRule(merchant, categoryId, notify: false) : 0;
     await _loadTxns();
     await _loadPending();
     notifyListeners();
     await checkAlerts(t);
+    return others;
   }
 
   Future<void> ignoreSms(SmsItem it, {bool blockSender = false}) async {
@@ -693,13 +717,83 @@ class AppState extends ChangeNotifier {
 
   // ----------------------------------------------------------------- rules
 
-  Future<void> learnRule(String merchant, int categoryId, {bool notify = true}) async {
+  bool get autoConfirm => settings['autoConfirm'] != '0';
+
+  /// Category from a rule you taught (not the built-in keyword list), matched on the merchant name.
+  int? learnedCategory(String merchant, String kind) {
+    final m = merchant.toLowerCase().trim();
+    if (m.isEmpty) return null;
+    for (final r in rules) {
+      if (!r.learned) continue;
+      final c = cat(r.categoryId);
+      if (c == null || c.archived || c.kind != kind) continue;
+      if (m.contains(r.keyword)) return c.id;
+    }
+    return null;
+  }
+
+  /// Remembers the merchant's category and applies it to SMS still waiting in Review:
+  /// they are added automatically (or just re-suggested when auto-adding is off).
+  /// Returns how many waiting SMS were added.
+  Future<int> learnRule(String merchant, int categoryId, {bool notify = true}) async {
     final key = merchantKey(merchant);
-    if (key.length < 3) return;
+    if (key.length < 3) return 0;
     await db.insert('rules', {'keyword': key, 'category_id': categoryId, 'learned': 1},
         conflictAlgorithm: ConflictAlgorithm.replace);
     await _loadRules();
+    final n = await _applyRuleToPending(key, categoryId);
     if (notify) notifyListeners();
+    return n;
+  }
+
+  Future<int> _applyRuleToPending(String key, int categoryId) async {
+    final c = cat(categoryId);
+    if (c == null) return 0;
+    final rows = await db.query('sms_inbox', where: 'status = ?', whereArgs: ['pending']);
+    final added = <Txn>[];
+    for (final r in rows) {
+      final it = SmsItem.fromMap(r);
+      if (it.kind != c.kind || !it.merchant.toLowerCase().contains(key)) continue;
+      if (autoConfirm) {
+        final t = Txn(kind: it.kind, amount: it.amount, categoryId: categoryId,
+            date: isoDate(DateTime.fromMillisecondsSinceEpoch(it.receivedAt)), merchant: it.merchant,
+            source: 'sms', smsKey: it.smsKey);
+        await db.insert('txns', t.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
+        await db.update('sms_inbox', {'status': 'confirmed', 'category_id': categoryId}, where: 'id = ?', whereArgs: [it.id]);
+        added.add(t);
+      } else {
+        await db.update('sms_inbox', {'category_id': categoryId}, where: 'id = ?', whereArgs: [it.id]);
+      }
+    }
+    if (added.isNotEmpty) {
+      await _loadTxns();
+      for (final t in added) {
+        await checkAlerts(t);
+      }
+    }
+    await _loadPending();
+    return added.length;
+  }
+
+  /// Other entries from the same merchant that sit in a different category than [t].
+  List<Txn> sameMerchantElsewhere(Txn t) {
+    final key = merchantKey(t.merchant);
+    if (key.length < 3) return [];
+    return txns.where((x) {
+      if (x.id == t.id || x.kind != t.kind || x.categoryId == t.categoryId || x.merchant.isEmpty) return false;
+      final k = merchantKey(x.merchant);
+      return x.merchant.toLowerCase().contains(key) || (k.length >= 4 && key.contains(k));
+    }).toList();
+  }
+
+  Future<void> moveToCategory(List<Txn> list, int categoryId) async {
+    final batch = db.batch();
+    for (final t in list) {
+      batch.update('txns', {'category_id': categoryId}, where: 'id = ?', whereArgs: [t.id]);
+    }
+    await batch.commit(noResult: true);
+    await _loadTxns();
+    notifyListeners();
   }
 
   Future<void> addRule(String keyword, int categoryId) async {
@@ -766,7 +860,12 @@ class AppState extends ChangeNotifier {
       final name = at(iCat);
       var c = name.isEmpty ? null : catByName(name);
       if (c == null && name.isNotEmpty) c = await addCategory(name, kind, kind == 'income' ? 'income' : 'want');
-      c ??= catByName(kind == 'income' ? 'Other income' : 'Other') ?? active(kind).first;
+      final fallback = catByName(kind == 'income' ? 'Other income' : 'Other');
+      if (c == null || c.id == fallback?.id) {
+        final learned = learnedCategory(at(iMer).isNotEmpty ? at(iMer) : at(iNote), kind);
+        if (learned != null) c = cat(learned);
+      }
+      c ??= fallback ?? active(kind).first;
       kind = c.kind;
       batch.insert('txns', Txn(kind: kind, amount: amount.abs(), categoryId: c.id, date: date,
           note: at(iNote), merchant: at(iMer), source: 'import').toMap());

@@ -65,6 +65,7 @@ class _EntryFormState extends State<EntryForm> {
       error = null;
     });
     final t = widget.existing ?? Txn(kind: kind, amount: amount, categoryId: categoryId!, date: isoDate(date));
+    final oldCategory = widget.existing?.categoryId;
     t
       ..kind = kind
       ..amount = amount
@@ -75,6 +76,26 @@ class _EntryFormState extends State<EntryForm> {
     await app.saveTxn(t);
     if (t.merchant.isNotEmpty) await app.learnRule(t.merchant, t.categoryId);
     if (!mounted) return;
+    // Changed the category of a merchant? Offer to move its other entries too.
+    if (t.merchant.isNotEmpty && oldCategory != t.categoryId) {
+      final others = app.sameMerchantElsewhere(t);
+      if (others.isNotEmpty) {
+        final move = await showDialog<bool>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: Text(tr('Update other {m} entries?', {'m': t.merchant})),
+            content: Text(tr('{n} other entries from {m} are in a different category. Move them to {cat} as well?',
+                {'n': others.length, 'm': t.merchant, 'cat': app.cat(t.categoryId)?.display ?? ''})),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Only this one')),
+              FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Move all')),
+            ],
+          ),
+        );
+        if (move == true) await app.moveToCategory(others, t.categoryId);
+        if (!mounted) return;
+      }
+    }
     if (another) {
       setState(() {
         saving = false;

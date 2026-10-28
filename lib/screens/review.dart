@@ -171,9 +171,16 @@ class _ReviewCardState extends State<ReviewCard> {
           const SnackBar(content: T('Check the amount and pick a category first.')));
       return;
     }
-    await app.confirmSms(widget.item,
+    final messenger = ScaffoldMessenger.of(context);
+    final merchant = merchantCtl.text.trim();
+    final others = await app.confirmSms(widget.item,
         amount: amount, kind: kind, categoryId: categoryId!, merchant: merchantCtl.text,
         date: isoDate(date), remember: remember);
+    if (others > 0) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(tr('{n} more from {m} were added to {cat} automatically.',
+              {'n': others, 'm': merchant, 'cat': app.cat(categoryId!)?.display ?? ''}))));
+    }
   }
 
   Future<void> _ignore() async {

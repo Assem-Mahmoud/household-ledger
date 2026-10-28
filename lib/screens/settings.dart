@@ -118,6 +118,12 @@ class SettingsScreen extends StatelessWidget {
                     }
                   : null,
             ),
+            SwitchListTile(
+              title: const T('Add known merchants automatically'),
+              subtitle: const T('SMS from a merchant you have already categorised skip Review and go straight into your entries.'),
+              value: app.autoConfirm,
+              onChanged: (v) => app.setSetting('autoConfirm', v ? '1' : '0'),
+            ),
             ListTile(
               title: const T('SMS start date'),
               subtitle: Text(app.smsStartDate == null
@@ -500,7 +506,7 @@ class CategoriesScreen extends StatelessWidget {
               for (final c in app.categories.where((c) => c.grp == g.$1))
                 ListTile(
                   leading: CategoryDot(c.color, size: 14),
-                  title: Text(c.name,
+                  title: Text(c.display,
                       style: c.archived ? TextStyle(color: Theme.of(context).disabledColor, decoration: TextDecoration.lineThrough) : null),
                   subtitle: c.archived ? const T('Hidden') : null,
                   trailing: const Icon(Icons.edit_outlined, size: 20),
@@ -514,7 +520,7 @@ class CategoriesScreen extends StatelessWidget {
   }
 
   Future<void> _edit(BuildContext context, Category? existing) async {
-    final nameCtl = TextEditingController(text: existing?.name ?? '');
+    final nameCtl = TextEditingController(text: existing?.display ?? '');
     var grp = existing?.grp ?? 'want';
     var color = existing?.color ?? palette[app.categories.length % palette.length];
     var archived = existing?.archived ?? false;
@@ -581,7 +587,7 @@ class CategoriesScreen extends StatelessWidget {
       await app.updateCategory(created);
     } else {
       existing
-        ..name = nameCtl.text.trim()
+        ..name = nameCtl.text.trim() == existing.display ? existing.name : nameCtl.text.trim()
         ..grp = existing.kind == 'income' ? 'income' : grp
         ..kind = existing.kind
         ..color = color
@@ -656,7 +662,7 @@ class RulesScreen extends StatelessWidget {
               decoration: InputDecoration(labelText: tr('Category'), border: const OutlineInputBorder()),
               items: [
                 for (final cat in app.categories.where((x) => !x.archived))
-                  DropdownMenuItem(value: cat.id, child: Text(cat.name)),
+                  DropdownMenuItem(value: cat.id, child: Text(cat.display)),
               ],
               onChanged: (v) => setState(() => catId = v),
             ),
