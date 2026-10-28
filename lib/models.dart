@@ -23,8 +23,19 @@ class Category {
     this.archived = false,
   });
 
-  /// Name shown on screen (built-in names are translated; user names are kept).
-  String get display => tr(name);
+  /// Name shown on screen. Built-in names get a friendlier label (and Arabic translation);
+  /// names the user typed are shown as typed. The stored name never changes, so imports keep matching.
+  String get display => isAr ? tr(name) : (_friendly[name] ?? name);
+
+  static const _friendly = {
+    'Housing': 'Housing & rent',
+    'Utilities': 'Bills & utilities',
+    'Transport': 'Transport & car',
+    'Dining': 'Dining & cafés',
+    'Family': 'Family support',
+    'Housing allowance': 'Allowances',
+    'Consulting / freelance': 'Freelance',
+  };
 
   bool get isExpense => kind == 'expense';
   bool get isSaving => grp == 'save';

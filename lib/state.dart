@@ -513,6 +513,7 @@ class AppState extends ChangeNotifier {
       for (final t in autoAdded) {
         await checkAlerts(t);
       }
+      if (autoAdded.isNotEmpty) lastAutoAdded += autoAdded.length;
       final window = ranged
           ? ' ${tr('between {a} and {b}', {'a': from != null ? shortDate(from) : tr('the start'), 'b': to != null ? shortDate(to) : tr('today')})}'
           : '';
@@ -718,6 +719,26 @@ class AppState extends ChangeNotifier {
   // ----------------------------------------------------------------- rules
 
   bool get autoConfirm => settings['autoConfirm'] != '0';
+
+  /// SMS added automatically since the Review banner was last dismissed.
+  int lastAutoAdded = 0;
+
+  void dismissAutoBanner() {
+    lastAutoAdded = 0;
+    notifyListeners();
+  }
+
+  /// Card settlements and moves between your own accounts are not spending.
+  static const _transferWords = [
+    'between accounts', 'between your accounts', 'own account', 'card payment', 'credit card payment',
+    'advance payment', 'transfer to own', 'تحويل بين حسابات', 'تحويل داخلي', 'عملية تحويل داخلية',
+    'سداد بطاقة', 'سداد البطاقة', 'دفعة مقدمة',
+  ];
+
+  bool looksLikeOwnTransfer(String body) {
+    final b = body.toLowerCase();
+    return _transferWords.any(b.contains);
+  }
 
   /// Category from a rule you taught (not the built-in keyword list), matched on the merchant name.
   int? learnedCategory(String merchant, String kind) {

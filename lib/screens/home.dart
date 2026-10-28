@@ -114,20 +114,16 @@ class HomeScreen extends StatelessWidget {
                     _line(context, 'Spending', -s.spend, spendColor),
                     const Divider(height: 14),
                     _line(context, 'Left after spending', s.net, s.net < 0 ? badColor : cs.onSurface, bold: true),
-                    if (s.save > 0) ...[
-                      _line(context, 'Moved to savings', -s.save, cs.onSurfaceVariant),
-                      const Divider(height: 14),
-                      _line(context, 'Remaining', s.net - s.save, s.net - s.save < 0 ? warnColor : cs.onSurface, bold: true),
-                      if (s.net - s.save < -0.5)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            tr('You moved {a} more to savings than this month left over, '
-                                'using money already in your account.', {'a': fmt(s.save - s.net)}),
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                          ),
-                        ),
-                    ],
+                    if (s.save > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(children: [
+                          Icon(Icons.savings_outlined, size: 16, color: cs.onSurfaceVariant),
+                          const SizedBox(width: 6),
+                          Expanded(child: T('Moved to savings', style: TextStyle(color: cs.onSurfaceVariant))),
+                          Text(money(s.save), style: TextStyle(color: cs.onSurfaceVariant, fontFeatures: tabular)),
+                        ]),
+                      ),
                   ]),
                 ),
 

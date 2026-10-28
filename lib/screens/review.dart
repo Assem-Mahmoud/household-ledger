@@ -49,6 +49,25 @@ class ReviewScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.only(bottom: 32),
               children: [
+                if (app.lastAutoAdded > 0)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Material(
+                      color: goodColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      child: ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.auto_awesome, color: goodColor),
+                        title: Text(tr('{n} from merchants you\'ve categorised were added automatically.', {'n': app.lastAutoAdded})),
+                        trailing: IconButton(
+                          tooltip: tr('Dismiss'),
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: app.dismissAutoBanner,
+                        ),
+                        onTap: () => app.tab.value = 2,
+                      ),
+                    ),
+                  ),
                 if (window != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -224,6 +243,21 @@ class _ReviewCardState extends State<ReviewCard> {
                 style: TextStyle(color: cs.primary, fontSize: 12.5, fontWeight: FontWeight.w600)),
           ),
         ]),
+        if (app.looksLikeOwnTransfer(widget.item.body)) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(color: warnColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+            child: Row(children: [
+              const Icon(Icons.swap_horiz, size: 18, color: warnColor),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: T('Looks like a card payment or a transfer between your own accounts. These aren\'t spending — tap Ignore.',
+                    style: TextStyle(fontSize: 12.5)),
+              ),
+            ]),
+          ),
+        ],
         if (showRaw) ...[
           const SizedBox(height: 8),
           Container(

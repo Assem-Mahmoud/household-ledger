@@ -3,11 +3,11 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'i18n.dart';
 
-import 'native.dart';
 import 'screens/analytics.dart';
 import 'screens/budget.dart';
 import 'screens/entries.dart';
 import 'screens/home.dart';
+import 'screens/onboarding.dart';
 import 'screens/review.dart';
 import 'state.dart';
 
@@ -83,33 +83,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   static bool _started = false;
 
   Future<void> _firstRun() async {
-    if (_started) return; // the shell is rebuilt when the language changes
+    if (_started || !app.flag('onboarded')) return; // runs once, after setup is done
     _started = true;
-    if (!app.flag('onboarded')) {
-      final go = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (c) => AlertDialog(
-          title: const T('Welcome to Household Ledger'),
-          content: const T(
-            'The app can read your bank SMS to capture card purchases, transfers and salary automatically. '
-            'You confirm each one and pick its category. Messages are read on this phone only.\n\n'
-            'It also sends budget warnings and a daily reminder to log cash spending.',
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Manual entry only')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Allow SMS & notifications')),
-          ],
-        ),
-      );
-      await app.setSetting('onboarded', '1');
-      if (go != true) {
-        await app.setSetting('smsOn', '0');
-        await Native.requestPermissions(sms: false);
-        await app.applyReminder();
-        return;
-      }
-    }
     await app.applyReminder();
     await app.checkPlanReminders();
     if (app.flag('smsOn')) {
@@ -122,6 +97,12 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (!app.flag('onboarded')) {
+      return OnboardingScreen(onDone: () {
+        setState(() {});
+        WidgetsBinding.instance.addPostFrameCallback((_) => _firstRun());
+      });
+    }
     return ValueListenableBuilder<int>(
       valueListenable: app.tab,
       builder: (context, index, _) => ListenableBuilder(

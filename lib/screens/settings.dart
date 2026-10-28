@@ -24,7 +24,7 @@ class SettingsScreen extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(title: const T('Settings')),
           body: ListView(padding: const EdgeInsets.only(bottom: 32), children: [
-            _header(context, 'Language'),
+            _header(context, 'General'),
             ListTile(
               leading: const Icon(Icons.translate),
               title: const T('App language'),
@@ -43,7 +43,6 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
 
-            _header(context, 'Month'),
             ListTile(
               title: const T('Period starts on day'),
               subtitle: Text(app.cycleStartDay == 1
@@ -60,41 +59,6 @@ class SettingsScreen extends StatelessWidget {
               title: const T('Currency label'),
               trailing: Text(app.currency, style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
               onTap: () => _editText(context, 'Currency label', 'currency'),
-            ),
-
-            _header(context, 'Alerts'),
-            ListTile(
-              title: const T('Warn when a budget reaches'),
-              subtitle: Slider(
-                value: app.alertPct.toDouble(),
-                min: 50,
-                max: 95,
-                divisions: 9,
-                label: '${app.alertPct}%',
-                onChanged: (v) => app.setSetting('alertPct', '${v.round()}'),
-              ),
-              trailing: Text('${app.alertPct}%', style: const TextStyle(fontWeight: FontWeight.w600)),
-            ),
-            SwitchListTile(
-              title: const T('Daily reminder'),
-              subtitle: Text(tr('Log cash spending and confirm SMS at {t}', {'t': '${two(h)}:${two(m)}'})),
-              value: app.flag('reminderOn'),
-              onChanged: (v) async {
-                await app.setSetting('reminderOn', v ? '1' : '0');
-                await app.applyReminder();
-              },
-            ),
-            ListTile(
-              enabled: app.flag('reminderOn'),
-              title: const T('Reminder time'),
-              trailing: Text('${two(h)}:${two(m)}', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
-              onTap: () async {
-                final t = await showTimePicker(context: context, initialTime: TimeOfDay(hour: h, minute: m));
-                if (t == null) return;
-                await app.setSetting('reminderH', '${t.hour}');
-                await app.setSetting('reminderM', '${t.minute}');
-                await app.applyReminder();
-              },
             ),
 
             _header(context, 'Bank SMS'),
@@ -172,6 +136,41 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => _testParser(context),
             ),
 
+            _header(context, 'Alerts'),
+            ListTile(
+              title: const T('Warn when a budget reaches'),
+              subtitle: Slider(
+                value: app.alertPct.toDouble(),
+                min: 50,
+                max: 95,
+                divisions: 9,
+                label: '${app.alertPct}%',
+                onChanged: (v) => app.setSetting('alertPct', '${v.round()}'),
+              ),
+              trailing: Text('${app.alertPct}%', style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            SwitchListTile(
+              title: const T('Daily reminder'),
+              subtitle: Text(tr('Log cash spending and confirm SMS at {t}', {'t': '${two(h)}:${two(m)}'})),
+              value: app.flag('reminderOn'),
+              onChanged: (v) async {
+                await app.setSetting('reminderOn', v ? '1' : '0');
+                await app.applyReminder();
+              },
+            ),
+            ListTile(
+              enabled: app.flag('reminderOn'),
+              title: const T('Reminder time'),
+              trailing: Text('${two(h)}:${two(m)}', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
+              onTap: () async {
+                final t = await showTimePicker(context: context, initialTime: TimeOfDay(hour: h, minute: m));
+                if (t == null) return;
+                await app.setSetting('reminderH', '${t.hour}');
+                await app.setSetting('reminderM', '${t.minute}');
+                await app.applyReminder();
+              },
+            ),
+
             _header(context, 'Categories'),
             ListTile(
               title: const T('Manage categories'),
@@ -186,75 +185,28 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RulesScreen())),
             ),
 
-            _header(context, 'Backup to Gmail'),
+            _header(context, 'Your data'),
             ListTile(
-              title: const T('Backup email'),
-              subtitle: Text((app.settings['backupEmail'] ?? '').isEmpty
-                  ? tr('Not set — Gmail opens with an empty "To"')
-                  : app.settings['backupEmail']!),
-              trailing: const Icon(Icons.alternate_email),
-              onTap: () => _editText(context, 'Backup email', 'backupEmail',
-                  help: 'Backups are emailed here, usually your own Gmail address.'),
-            ),
-            ListTile(
-              title: const T('Email a backup now'),
+              leading: Icon(Icons.backup_outlined, color: app.backupDue ? warnColor : null),
+              title: const T('Backup & restore'),
               subtitle: Text(app.daysSinceBackup == null
                   ? tr('Never backed up')
                   : app.daysSinceBackup == 0
                       ? tr('Last backup: today')
                       : trn(app.daysSinceBackup!, 'Last backup: {n} day ago', 'Last backup: {n} days ago')),
-              trailing: Icon(Icons.backup_outlined, color: app.backupDue ? warnColor : null),
-              onTap: () => emailBackupFlow(context),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen())),
             ),
             ListTile(
-              title: const T('Restore from backup'),
-              subtitle: const T('Pick a backup file saved from Gmail, Downloads or Drive'),
-              trailing: const Icon(Icons.settings_backup_restore),
-              onTap: () => _restore(context),
-            ),
-
-            _header(context, 'Data'),
-            ListTile(
-              title: const T('Import entries from a CSV file'),
+              leading: const Icon(Icons.upload_file),
+              title: const T('Import a statement (CSV)'),
               subtitle: const T('Statements or the web ledger export. Entries already in the app are skipped.'),
-              trailing: const Icon(Icons.upload_file),
               onTap: () => _importFile(context),
             ),
             ListTile(
-              title: const T('Email entries as CSV'),
-              subtitle: Text(tr('{n} entries · opens in Excel or Google Sheets', {'n': app.txns.length})),
-              trailing: const Icon(Icons.table_view_outlined),
-              onTap: () async {
-                try {
-                  await Native.emailFile(
-                    content: app.exportCsv(),
-                    fileName: 'household-ledger-${isoDate(DateTime.now())}.csv',
-                    to: app.settings['backupEmail'] ?? '',
-                    subject: tr('Household Ledger entries {d}', {'d': isoDate(DateTime.now())}),
-                    body: tr('All entries as CSV.'),
-                  );
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not open email: {e}', {'e': e}))));
-                  }
-                }
-              },
-            ),
-            ListTile(
-              title: const T('Copy all entries as CSV'),
-              subtitle: Text(tr('{n} entries · paste into Excel or Google Sheets', {'n': app.txns.length})),
-              trailing: const Icon(Icons.copy),
-              onTap: () async {
-                await Clipboard.setData(ClipboardData(text: app.exportCsv()));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: T('CSV copied to clipboard.')));
-                }
-              },
-            ),
-            ListTile(
+              leading: const Icon(Icons.content_paste),
               title: const T('Paste CSV rows'),
               subtitle: const T('Header: date,type,category,amount,note'),
-              trailing: const Icon(Icons.content_paste),
               onTap: () => _import(context),
             ),
             Padding(
@@ -858,5 +810,148 @@ Future<void> emailBackupFlow(BuildContext context) async {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not open email: {e}', {'e': e}))));
     }
+  }
+}
+
+/// Pick a backup file and restore it (used by onboarding too).
+Future<void> restoreBackupFlow(BuildContext context) => const SettingsScreen()._restore(context);
+
+/// Pick a statement CSV and import it, skipping entries already in the app.
+Future<void> importStatementFlow(BuildContext context) => const SettingsScreen()._importFile(context);
+
+// ---------------------------------------------------------------- backup
+
+/// Backup to Gmail, restore from a file, and spreadsheet export in one place.
+class BackupScreen extends StatelessWidget {
+  const BackupScreen({super.key});
+
+  Future<void> _emailCsv(BuildContext context) async {
+    try {
+      await Native.emailFile(
+        content: app.exportCsv(),
+        fileName: 'household-ledger-${isoDate(DateTime.now())}.csv',
+        to: app.settings['backupEmail'] ?? '',
+        subject: tr('Household Ledger entries {d}', {'d': isoDate(DateTime.now())}),
+        body: tr('All entries as CSV.'),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not open email: {e}', {'e': e}))));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: app,
+      builder: (context, _) {
+        final cs = Theme.of(context).colorScheme;
+        final email = app.settings['backupEmail'] ?? '';
+        final days = app.daysSinceBackup;
+        Widget card(List<Widget> children) => Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: cs.outlineVariant),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+            );
+        return Scaffold(
+          appBar: AppBar(title: const T('Backup & restore')),
+          body: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
+            Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: warnColor.withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.info_outline, color: warnColor),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: T('Your data lives only on this phone. Uninstalling the app or changing phones deletes it unless you keep a backup.',
+                      style: TextStyle(height: 1.45, color: cs.onSurface)),
+                ),
+              ]),
+            ),
+            card([
+              const T('Back up to Gmail', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.alternate_email),
+                title: const T('Send backups to'),
+                subtitle: Text(email.isEmpty ? tr('Not set — Gmail opens with an empty "To"') : email),
+                trailing: const Icon(Icons.edit_outlined, size: 20),
+                onTap: () => const SettingsScreen()._editText(context, 'Backup email', 'backupEmail',
+                    help: 'Backups are emailed here, usually your own Gmail address.'),
+              ),
+              Text(
+                days == null
+                    ? tr('Never backed up')
+                    : days == 0
+                        ? tr('Last backup: today')
+                        : trn(days, 'Last backup: {n} day ago', 'Last backup: {n} days ago'),
+                style: TextStyle(color: app.backupDue ? warnColor : cs.onSurfaceVariant, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                onPressed: () => emailBackupFlow(context),
+                icon: const Icon(Icons.backup_outlined),
+                label: const T('Email a backup now'),
+              ),
+              const SizedBox(height: 6),
+              T('Gmail opens with the backup attached — tap Send to finish.',
+                  style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+            ]),
+            card([
+              const T('Restore', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              T('Pick a backup file saved from Gmail, Downloads or Drive. It replaces everything currently in the app.',
+                  style: TextStyle(height: 1.45, color: cs.onSurfaceVariant)),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                onPressed: () => const SettingsScreen()._restore(context),
+                icon: const Icon(Icons.settings_backup_restore),
+                label: const T('Choose backup file'),
+              ),
+            ]),
+            card([
+              const T('Export for spreadsheets', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(tr('{n} entries · opens in Excel or Google Sheets', {'n': app.txns.length}),
+                  style: TextStyle(color: cs.onSurfaceVariant)),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                    onPressed: () => _emailCsv(context),
+                    icon: const Icon(Icons.mail_outline),
+                    label: const T('Email CSV'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: app.exportCsv()));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: T('CSV copied to clipboard.')));
+                      }
+                    },
+                    icon: const Icon(Icons.copy),
+                    label: const T('Copy CSV'),
+                  ),
+                ),
+              ]),
+            ]),
+          ]),
+        );
+      },
+    );
   }
 }
