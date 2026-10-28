@@ -309,6 +309,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             : null,
       ),
       const SizedBox(height: 14),
+      Row(children: [
+        Expanded(child: T('My currency', style: TextStyle(fontWeight: FontWeight.w600, color: cs.onSurfaceVariant))),
+        CurrencyPicker(onChanged: (code) async {
+          await app.setSetting('currency', code, notify: false);
+          setState(() {});
+        }),
+      ]),
+      const SizedBox(height: 10),
       TextField(
         controller: incomeCtl,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),

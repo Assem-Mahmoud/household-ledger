@@ -60,5 +60,15 @@ const seedRules = <String, String>{
   'ehsan': 'Charity', 'احسان': 'Charity', 'إحسان': 'Charity',
   'salon': 'Personal care', 'barber': 'Personal care',
   'saudia': 'Travel', 'flynas': 'Travel', 'flyadeal': 'Travel', 'booking.com': 'Travel',
-  'salary': 'Salary', 'راتب': 'Salary',
+  'salary': 'Salary', 'راتب': 'Salary', 'مرتب': 'Salary',
+  // Egypt and the Gulf
+  'spinneys': 'Groceries', 'hyperone': 'Groceries', 'hyper one': 'Groceries', 'kazyon': 'Groceries',
+  'metro market': 'Groceries', 'breadfast': 'Groceries', 'instashop': 'Groceries', 'sultan center': 'Groceries',
+  'talabat': 'Dining', 'deliveroo': 'Dining', 'zomato': 'Dining', 'elmenus': 'Dining',
+  'swvl': 'Transport', 'indrive': 'Transport', 'didi': 'Transport', 'salik': 'Transport', 'enoc': 'Transport',
+  'adnoc': 'Transport', 'woqod': 'Transport',
+  'vodafone': 'Utilities', 'orange': 'Utilities', 'etisalat': 'Utilities', 'we internet': 'Utilities',
+  'fawry': 'Utilities', 'dewa': 'Utilities', 'ooredoo': 'Utilities',
+  'ezaby': 'Health', 'العزبي': 'Health', 'seif pharm': 'Health',
+  'b.tech': 'Shopping', 'raya': 'Shopping', 'sharaf dg': 'Shopping',
 };

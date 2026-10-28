@@ -8,6 +8,7 @@ import '../sms_parser.dart' show foreignCurrency;
 import '../state.dart';
 import '../widgets.dart';
 import 'settings.dart' show scanRange;
+import 'teach.dart';
 
 /// Bank SMS waiting for confirmation: check amount, pick category, confirm or ignore.
 class ReviewScreen extends StatelessWidget {
@@ -244,6 +245,16 @@ class _ReviewCardState extends State<ReviewCard> {
                 style: TextStyle(color: cs.primary, fontSize: 12.5, fontWeight: FontWeight.w600)),
           ),
         ]),
+        if (showRaw)
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton.icon(
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => TeachSmsScreen(body: widget.item.body, sender: widget.item.sender))),
+              icon: const Icon(Icons.school_outlined, size: 18),
+              label: const T('Read wrongly? Teach the app'),
+            ),
+          ),
         if (app.looksLikeOwnTransfer(widget.item.body)) ...[
           const SizedBox(height: 8),
           Container(
@@ -259,7 +270,7 @@ class _ReviewCardState extends State<ReviewCard> {
             ]),
           ),
         ],
-        if (foreignCurrency(widget.item.body) case final fx?) ...[
+        if (foreignCurrency(widget.item.body, currency: app.currencyCode) case final fx?) ...[
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -268,7 +279,7 @@ class _ReviewCardState extends State<ReviewCard> {
               const Icon(Icons.currency_exchange, size: 18, color: warnColor),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(tr('This amount is in {c}. Edit it to the riyal amount charged before confirming.', {'c': fx}),
+                child: Text(tr('This amount is in {c}. Edit it to the amount charged in your own currency before confirming.', {'c': fx}),
                     style: const TextStyle(fontSize: 12.5)),
               ),
             ]),

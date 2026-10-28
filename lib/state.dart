@@ -167,10 +167,17 @@ class AppState extends ChangeNotifier {
 
   // ------------------------------------------------------------- settings
 
-  String get currency {
-    final c = settings['currency']?.trim().isNotEmpty == true ? settings['currency']!.trim() : 'SAR';
-    return isAr && c.toUpperCase() == 'SAR' ? 'ر.س' : c;
+  /// Home currency code, e.g. SAR, EGP, AED. Drives SMS reading and how amounts are labelled.
+  String get currencyCode {
+    final c = settings['currency']?.trim() ?? '';
+    return c.isEmpty ? 'SAR' : c.toUpperCase();
   }
+
+  static const arabicCurrency = {
+    'SAR': 'ر.س', 'EGP': 'ج.م', 'AED': 'د.إ', 'KWD': 'د.ك', 'BHD': 'د.ب', 'QAR': 'ر.ق', 'OMR': 'ر.ع', 'JOD': 'د.أ',
+  };
+
+  String get currency => isAr ? (arabicCurrency[currencyCode] ?? currencyCode) : currencyCode;
 
   Future<void> setLanguagePref(String pref) async {
     await setSetting('lang', pref, notify: false);
@@ -208,6 +215,7 @@ class AppState extends ChangeNotifier {
     }
     await Native.setPref('smsAlerts', flag('smsAlerts') && flag('smsOn'));
     await Native.setPrefText('blockedSenders', lines('blockedSenders').join('\n'));
+    await Native.setPrefText('taughtSenders', templates.map((t) => t.sender).where((s) => s.isNotEmpty).join('\n'));
     await Native.setLang(lang);
   }
 
@@ -423,13 +431,71 @@ class AppState extends ChangeNotifier {
     return false;
   }
 
+  // ------------------------------------------------------- taught formats
+
+  String? _templatesJson;
+  List<SmsTemplate> _templates = [];
+
+  /// Message formats taught in Settings → Test or teach the SMS reader.
+  List<SmsTemplate> get templates {
+    final j = settings['smsTemplates'];
+    if (j != _templatesJson) {
+      _templatesJson = j;
+      _templates = SmsTemplate.decodeList(j);
+    }
+    return _templates;
+  }
+
+  Future<void> _saveTemplates(List<SmsTemplate> list) async {
+    await setSetting('smsTemplates', SmsTemplate.encodeList(list), notify: false);
+    await Native.setPrefText('taughtSenders', list.map((t) => t.sender).where((s) => s.isNotEmpty).join('\n'));
+  }
+
+  /// Saves a taught format, re-reads waiting messages, then rescans this period so matching SMS appear.
+  Future<String> addTemplate(SmsTemplate t) async {
+    await _saveTemplates([t, ...templates]);
+    return applySmsSettings();
+  }
+
+  Future<void> deleteTemplate(SmsTemplate t) async {
+    await _saveTemplates(templates.where((x) => x.id != t.id).toList());
+    await reparsePending(notify: false);
+    notifyListeners();
+  }
+
+  bool _ignored(String body) {
+    final lower = normalizeDigits(body).toLowerCase();
+    return lines('ignoreKw').any(lower.contains);
+  }
+
+  /// What the app would extract from a message: a taught format first, then the built-in reader.
+  /// Returns the result and whether a taught format was used.
+  (ParsedSms?, bool) readMessage(String body, {String sender = ''}) {
+    if (_ignored(body)) return (null, false);
+    for (final t in templates) {
+      if (!t.senderMatches(sender)) continue;
+      final p = t.apply(body, currency: currencyCode);
+      if (p != null) return (p, true);
+    }
+    return (parseSms(body, ignore: lines('ignoreKw'), income: lines('incomeKw'), currency: currencyCode), false);
+  }
+
   /// Whether a message passes the sender filters and keyword rules. Returns the parse result if it does.
   ParsedSms? _accept(String sender, String body) {
     final allow = lines('senders');
     if (_senderIn(sender, lines('blockedSenders'))) return null;
-    if (allow.isNotEmpty && !_senderIn(sender, allow)) return null;
-    if (allow.isEmpty && !looksLikeTransaction(body)) return null;
-    return parseSms(body, ignore: lines('ignoreKw'), income: lines('incomeKw'));
+    final allowed = allow.isEmpty || _senderIn(sender, allow);
+    // a format you taught wins over the built-in reader (one tied to a sender ignores the sender list)
+    if (templates.isNotEmpty && !_ignored(body)) {
+      for (final t in templates) {
+        if (t.sender.isEmpty ? !allowed : !t.senderMatches(sender)) continue;
+        final p = t.apply(body, currency: currencyCode);
+        if (p != null) return p;
+      }
+    }
+    if (!allowed) return null;
+    if (allow.isEmpty && !looksLikeTransaction(body, currency: currencyCode)) return null;
+    return parseSms(body, ignore: lines('ignoreKw'), income: lines('incomeKw'), currency: currencyCode);
   }
 
   /// Reads SMS and adds bank transactions to the review list.
@@ -658,7 +724,7 @@ class AppState extends ChangeNotifier {
     for (final m in messages) {
       final sender = (m['address'] ?? '').toString();
       if (sender.isEmpty) continue;
-      if (looksLikeTransaction((m['body'] ?? '').toString())) counts[sender] = (counts[sender] ?? 0) + 1;
+      if (looksLikeTransaction((m['body'] ?? '').toString(), currency: currencyCode)) counts[sender] = (counts[sender] ?? 0) + 1;
     }
     final out = counts.entries.map((e) => (e.key, e.value)).toList()..sort((a, b) => b.$2.compareTo(a.$2));
     return out;

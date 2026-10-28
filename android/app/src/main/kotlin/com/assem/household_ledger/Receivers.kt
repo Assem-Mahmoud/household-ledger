@@ -80,7 +80,12 @@ class BootReceiver : BroadcastReceiver() {
 
 /** Shows a notification when a bank-looking SMS arrives. Parsing happens in the app. */
 class SmsReceiver : BroadcastReceiver() {
-    private val currency = Regex("((?<![A-Za-z])(SAR|SR)(?![A-Za-z])|ر\\.?\\s?س|ريال)", RegexOption.IGNORE_CASE)
+    // riyal, Egyptian pound, dirham, dinar and common foreign currencies
+    private val currency = Regex(
+        "((?<![A-Za-z])(SAR|SR|EGP|LE|L\\.E|AED|DHS?|KWD|KD|BHD|BD|QAR|QR|OMR|RO|JOD|JD|USD|EUR|GBP)(?![A-Za-z])" +
+            "|ر\\.?\\s?س|ريال|جنيه|ج\\.?\\s?م|(?<![\u0621-\u064A])جم(?![\u0621-\u064A])|درهم|د\\.?\\s?إ|دينار|د\\.?\\s?ك|[$€£])",
+        RegexOption.IGNORE_CASE
+    )
     private val amount = Regex("[0-9٠-٩][0-9٠-٩,.]*")
     private val ignore = listOf(
         "otp", "verification", "one time", "رمز", "كلمة المرور", "password",
@@ -91,7 +96,8 @@ class SmsReceiver : BroadcastReceiver() {
     private val transaction = listOf(
         "purchase", "شراء", "pos", "mada", "مدى", "payment", "سداد", "paid", "دفع", "withdraw", "سحب",
         "transfer", "حوالة", "تحويل", "debit", "credit", "خصم", "إيداع", "ايداع", "deposit", "salary", "راتب",
-        "refund", "استرداد", "card", "بطاقة", "atm", "صراف", "amount", "مبلغ", "received", "sent"
+        "refund", "استرداد", "card", "بطاقة", "atm", "صراف", "amount", "مبلغ", "received", "sent",
+        "spent", "charged", "مرتب", "إضافة", "اضافة", "استلام", "instapay", "fawry"
     )
 
     override fun onReceive(ctx: Context, intent: Intent) {
@@ -105,9 +111,14 @@ class SmsReceiver : BroadcastReceiver() {
         val lower = body.lowercase()
         if (ignore.any { lower.contains(it) }) return
         if (!currency.containsMatchIn(body) || !amount.containsMatchIn(body)) return
-        if (transaction.none { lower.contains(it) }) return
-        val blocked = prefs.getString("blockedSenders", "") ?: ""
         val from = (parts[0].originatingAddress ?: "").lowercase().replace(Regex("[^a-z0-9\u0600-\u06ff]"), "")
+        // senders with a format taught in the app skip the keyword check
+        val taught = (prefs.getString("taughtSenders", "") ?: "").split("\n").any { t ->
+            val n = t.lowercase().replace(Regex("[^a-z0-9\u0600-\u06ff]"), "")
+            n.isNotEmpty() && from.isNotEmpty() && (from.contains(n) || n.contains(from))
+        }
+        if (!taught && transaction.none { lower.contains(it) }) return
+        val blocked = prefs.getString("blockedSenders", "") ?: ""
         if (from.isNotEmpty() && blocked.split("\n").any { b ->
                 val n = b.lowercase().replace(Regex("[^a-z0-9\u0600-\u06ff]"), "")
                 n.isNotEmpty() && from.contains(n)

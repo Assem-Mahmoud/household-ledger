@@ -361,3 +361,35 @@ class SplitBar extends StatelessWidget {
     );
   }
 }
+
+/// Currencies offered in Settings and first-run setup (code, English name).
+const currencyChoices = [
+  ('SAR', 'Saudi riyal'), ('EGP', 'Egyptian pound'), ('AED', 'UAE dirham'), ('KWD', 'Kuwaiti dinar'),
+  ('QAR', 'Qatari riyal'), ('BHD', 'Bahraini dinar'), ('OMR', 'Omani rial'), ('JOD', 'Jordanian dinar'),
+  ('USD', 'US dollar'), ('EUR', 'Euro'), ('GBP', 'British pound'),
+];
+
+class CurrencyPicker extends StatelessWidget {
+  final ValueChanged<String> onChanged;
+  const CurrencyPicker({super.key, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final code = app.currencyCode;
+    final known = currencyChoices.any((c) => c.$1 == code);
+    return DropdownButton<String>(
+      value: code,
+      items: [
+        for (final c in currencyChoices) DropdownMenuItem(value: c.$1, child: Text('${c.$1} · ${tr(c.$2)}')),
+        if (!known) DropdownMenuItem(value: code, child: Text(code)),
+      ],
+      selectedItemBuilder: (_) => [
+        for (final c in currencyChoices) Center(child: Text(c.$1)),
+        if (!known) Center(child: Text(code)),
+      ],
+      onChanged: (v) {
+        if (v != null && v != code) onChanged(v);
+      },
+    );
+  }
+}

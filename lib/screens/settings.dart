@@ -9,6 +9,7 @@ import '../periods.dart';
 import '../sms_parser.dart';
 import '../state.dart';
 import '../widgets.dart';
+import 'teach.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -56,9 +57,12 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
             ListTile(
-              title: const T('Currency label'),
-              trailing: Text(app.currency, style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
-              onTap: () => _editText(context, 'Currency label', 'currency'),
+              title: const T('Currency'),
+              subtitle: const T('Used to read amounts in bank SMS'),
+              trailing: CurrencyPicker(onChanged: (code) async {
+                await app.setSetting('currency', code);
+                if (context.mounted) await rescanAfterChange(context);
+              }),
             ),
 
             _header(context, 'Bank SMS'),
@@ -130,10 +134,12 @@ class SettingsScreen extends StatelessWidget {
                   resetTo: defaultIncomeKeywords.join('\n')),
             ),
             ListTile(
-              title: const T('Test the SMS reader'),
-              subtitle: const T('Paste a bank message to see what the app extracts'),
-              trailing: const Icon(Icons.science_outlined),
-              onTap: () => _testParser(context),
+              title: const T('Test or teach the SMS reader'),
+              subtitle: Text(app.templates.isEmpty
+                  ? tr('Paste a bank message to see what the app reads. If it\'s wrong, mark the amount and merchant yourself.')
+                  : tr('{n} formats taught. Paste a message to test or teach another.', {'n': app.templates.length})),
+              trailing: const Icon(Icons.school_outlined),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TeachSmsScreen())),
             ),
 
             _header(context, 'Alerts'),
@@ -253,47 +259,6 @@ class SettingsScreen extends StatelessWidget {
     if (result == null) return;
     await app.setSetting(key, result.trim());
     if (smsKeys.contains(key) && context.mounted) await rescanAfterChange(context);
-  }
-
-  Future<void> _testParser(BuildContext context) async {
-    final ctl = TextEditingController();
-    await showDialog<void>(
-      context: context,
-      builder: (c) => StatefulBuilder(builder: (c, setState) {
-        final text = ctl.text;
-        final parsed = text.trim().isEmpty ? null : parseSms(text, ignore: app.lines('ignoreKw'), income: app.lines('incomeKw'));
-        final catId = parsed == null ? null : app.suggestCategory(parsed.merchant, text, parsed.kind);
-        return AlertDialog(
-          title: const T('Test the SMS reader'),
-          content: SizedBox(
-            width: 400,
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              TextField(
-                controller: ctl,
-                minLines: 4,
-                maxLines: 8,
-                decoration: InputDecoration(hintText: tr('Paste a bank SMS here'), border: const OutlineInputBorder()),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 12),
-              if (text.trim().isNotEmpty)
-                parsed == null
-                    ? const T('Not recognised as a transaction (no amount found, or it matched an ignore keyword).',
-                        style: TextStyle(color: badColor))
-                    : Text(
-                        tr('Amount: {a}\nType: {t}\nMerchant: {m}\nCategory: {c}', {
-                          'a': '${parsed.amount} ${app.currency}',
-                          't': tr(parsed.kind == 'income' ? 'Income' : 'Expense'),
-                          'm': parsed.merchant.isEmpty ? tr('(not found)') : parsed.merchant,
-                          'c': catId == null ? tr('(you pick)') : app.cat(catId)!.display,
-                        }),
-                      ),
-            ]),
-          ),
-          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const T('Close'))],
-        );
-      }),
-    );
   }
 
   Future<void> _smsStart(BuildContext context) async {
@@ -630,7 +595,7 @@ class RulesScreen extends StatelessWidget {
   }
 }
 
-const smsKeys = {'senders', 'blockedSenders', 'ignoreKw', 'incomeKw'};
+const smsKeys = {'senders', 'blockedSenders', 'ignoreKw', 'incomeKw', 'currency'};
 
 /// Re-checks waiting items and rescans the current period, then reports the result.
 Future<void> rescanAfterChange(BuildContext context) async {
