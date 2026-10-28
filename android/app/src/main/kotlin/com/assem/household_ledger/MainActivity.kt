@@ -96,9 +96,12 @@ class MainActivity : FlutterActivity() {
 
                     "setPref" -> {
                         val key = call.argument<String>("key") ?: ""
-                        val value = call.argument<Boolean>("value") ?: false
-                        getSharedPreferences(Reminder.PREFS, Context.MODE_PRIVATE)
-                            .edit().putBoolean(key, value).apply()
+                        val edit = getSharedPreferences(Reminder.PREFS, Context.MODE_PRIVATE).edit()
+                        when (val value = call.argument<Any>("value")) {
+                            is Boolean -> edit.putBoolean(key, value)
+                            else -> edit.putString(key, value?.toString() ?: "")
+                        }
+                        edit.apply()
                         result.success(null)
                     }
 

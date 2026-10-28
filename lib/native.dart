@@ -72,6 +72,12 @@ class Native {
     } catch (_) {}
   }
 
+  static Future<void> setPrefText(String key, String value) async {
+    try {
+      await _ch.invokeMethod('setPref', {'key': key, 'value': value});
+    } catch (_) {}
+  }
+
   static Future<void> setPref(String key, bool value) async {
     try {
       await _ch.invokeMethod('setPref', {'key': key, 'value': value});

@@ -82,7 +82,17 @@ class BootReceiver : BroadcastReceiver() {
 class SmsReceiver : BroadcastReceiver() {
     private val currency = Regex("((?<![A-Za-z])(SAR|SR)(?![A-Za-z])|ر\\.?\\s?س|ريال)", RegexOption.IGNORE_CASE)
     private val amount = Regex("[0-9٠-٩][0-9٠-٩,.]*")
-    private val ignore = listOf("otp", "verification", "one time", "رمز", "كلمة المرور", "password")
+    private val ignore = listOf(
+        "otp", "verification", "one time", "رمز", "كلمة المرور", "password",
+        // promotions and notices mention riyals too
+        "up to ", "يصل إلى", "يصل الى", "offer", "عرض", "limited time", "لفترة محدودة", "will be deducted",
+        "سيتم خصم", "due date", "is due", "reminder", "تذكير", "declined", "مرفوض", "hold of", "points"
+    )
+    private val transaction = listOf(
+        "purchase", "شراء", "pos", "mada", "مدى", "payment", "سداد", "paid", "دفع", "withdraw", "سحب",
+        "transfer", "حوالة", "تحويل", "debit", "credit", "خصم", "إيداع", "ايداع", "deposit", "salary", "راتب",
+        "refund", "استرداد", "card", "بطاقة", "atm", "صراف", "amount", "مبلغ", "received", "sent"
+    )
 
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
@@ -95,6 +105,13 @@ class SmsReceiver : BroadcastReceiver() {
         val lower = body.lowercase()
         if (ignore.any { lower.contains(it) }) return
         if (!currency.containsMatchIn(body) || !amount.containsMatchIn(body)) return
+        if (transaction.none { lower.contains(it) }) return
+        val blocked = prefs.getString("blockedSenders", "") ?: ""
+        val from = (parts[0].originatingAddress ?: "").lowercase().replace(Regex("[^a-z0-9\u0600-\u06ff]"), "")
+        if (from.isNotEmpty() && blocked.split("\n").any { b ->
+                val n = b.lowercase().replace(Regex("[^a-z0-9\u0600-\u06ff]"), "")
+                n.isNotEmpty() && from.contains(n)
+            }) return
 
         val sender = parts[0].originatingAddress ?: "Bank"
         val ar = Reminder.arabic(ctx)

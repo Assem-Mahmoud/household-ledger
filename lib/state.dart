@@ -194,6 +194,8 @@ class AppState extends ChangeNotifier {
     settings[key] = value;
     await db.insert('settings', {'key': key, 'value': value}, conflictAlgorithm: ConflictAlgorithm.replace);
     if (key == 'cycleDay') period = periodFor(DateTime.now(), cycleStartDay);
+    // the new-SMS notification (Android side) skips senders you blocked
+    if (key == 'blockedSenders') await Native.setPrefText('blockedSenders', value);
     if (notify) notifyListeners();
   }
 
@@ -205,6 +207,7 @@ class AppState extends ChangeNotifier {
       await Native.cancelReminder();
     }
     await Native.setPref('smsAlerts', flag('smsAlerts') && flag('smsOn'));
+    await Native.setPrefText('blockedSenders', lines('blockedSenders').join('\n'));
     await Native.setLang(lang);
   }
 
@@ -1092,6 +1095,10 @@ class AppState extends ChangeNotifier {
       }
     });
     await _loadSettings();
+    // the backup carries its own language choice
+    final restoredLang = settings['lang']?.isNotEmpty == true ? settings['lang']! : 'system';
+    setLanguage(restoredLang);
+    language.value = restoredLang;
     for (final e in keepBackupInfo.entries) {
       if (e.value != null && (settings[e.key] ?? '').isEmpty) await setSetting(e.key, e.value!, notify: false);
     }

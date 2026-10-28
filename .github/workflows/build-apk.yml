@@ -36,6 +36,11 @@ jobs:
           done
           grep -n "minSdk" android/app/build.gradle* || true
 
+      - name: Use the permanent signing key
+        env:
+          LEDGER_KEY_PASSWORD: ${{ secrets.LEDGER_KEY_PASSWORD }}
+        run: python3 tool/apply_signing.py
+
       - run: flutter pub get
 
       - name: Analyze
@@ -64,15 +69,30 @@ jobs:
           exit $code
 
       - name: Build release APK
+        env:
+          LEDGER_KEY_PASSWORD: ${{ secrets.LEDGER_KEY_PASSWORD }}
+          LEDGER_KEYSTORE: ${{ github.workspace }}/signing/household-ledger-release.p12
         run: |
           set +e
-          flutter build apk --release > build.txt 2>&1
+          flutter build apk --release --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }} > build.txt 2>&1
           code=$?
           cat build.txt
           if [ $code -ne 0 ]; then
             grep -E "^e: |error:|Error:|What went wrong" -A2 build.txt | head -30 | while IFS= read -r line; do echo "::error::$line"; done
           fi
           exit $code
+
+      - name: Check the APK signature
+        env:
+          HAS_KEY: ${{ secrets.LEDGER_KEY_PASSWORD != '' }}
+        run: |
+          mkdir -p sig && cd sig && unzip -o -q ../build/app/outputs/flutter-apk/app-release.apk 'META-INF/*.RSA'
+          fp=$(openssl pkcs7 -inform DER -in META-INF/*.RSA -print_certs | openssl x509 -noout -fingerprint -sha256 | cut -d= -f2)
+          echo "Signed with: $fp"
+          expected="62:32:10:88:AD:57:EE:AA:1F:D3:EC:6A:AE:0C:24:2D:20:92:59:47:6B:D4:42:DC:9B:99:7A:22:9B:28:D4:A7"
+          if [ "$HAS_KEY" = "true" ] && [ "$fp" != "$expected" ]; then
+            echo "::error::APK is not signed with the permanent key"; exit 1
+          fi
 
       - name: Upload APK (Actions artifact)
         uses: actions/upload-artifact@v4

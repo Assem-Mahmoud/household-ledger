@@ -74,7 +74,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    // not during first-run setup: the permission dialog itself pauses and resumes the app
+    if (state == AppLifecycleState.resumed && app.flag('onboarded')) {
       app.checkPlanReminders();
       if (app.flag('smsOn')) app.scanSms();
     }
