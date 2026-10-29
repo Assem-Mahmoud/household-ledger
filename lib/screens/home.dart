@@ -412,6 +412,8 @@ class EntryRow extends StatelessWidget {
     final acc = app.account(t.accountId);
     final title = t.label.isEmpty ? (cat?.display ?? '') : t.label;
     final meta = [
+      // the item description, unless it is already the title (no merchant)
+      if (t.merchant.isNotEmpty && t.note.isNotEmpty) t.note,
       cat?.display ?? '',
       if (acc != null) acc.name,
       if (showDate) shortDate(parseIso(t.date)),

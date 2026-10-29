@@ -220,6 +220,27 @@ class AnalyticsScreen extends StatelessWidget {
                       ),
                   ]),
                 ),
+              if (topItems(s).isNotEmpty)
+                SectionCard(
+                  title: 'Top items',
+                  child: Column(children: [
+                    for (final it in topItems(s))
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(color: lc.primarySoft, borderRadius: BorderRadius.circular(10)),
+                          child: Icon(Icons.sell_outlined, size: 18, color: lc.onPrimarySoft),
+                        ),
+                        title: Text(it.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(trn(it.count, '{n} time', '{n} times')),
+                        trailing: Text(fmt(it.total), style: const TextStyle(fontFeatures: tabular, fontWeight: FontWeight.w700)),
+                        onTap: () => app.searchEntries(it.name),
+                      ),
+                  ]),
+                ),
               SectionCard(
                 title: 'Top merchants',
                 child: merchants.isEmpty

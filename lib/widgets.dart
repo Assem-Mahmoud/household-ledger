@@ -536,3 +536,83 @@ class _DonutPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DonutPainter old) => true;
 }
+
+
+/// Descriptions used before, most frequent first (for suggestions and tracking).
+List<String> pastDescriptions() {
+  final counts = <String, int>{};
+  final shown = <String, String>{};
+  for (final t in app.txns) {
+    final n = t.note.trim();
+    if (n.isEmpty) continue;
+    final k = n.toLowerCase();
+    counts[k] = (counts[k] ?? 0) + 1;
+    shown.putIfAbsent(k, () => n);
+  }
+  final keys = counts.keys.toList()..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+  return [for (final k in keys) shown[k]!];
+}
+
+/// "What for?" — a short description of the item, with suggestions from earlier entries.
+class WhatForField extends StatefulWidget {
+  final TextEditingController controller;
+  final FocusNode? focusNode;
+  final bool dense;
+  const WhatForField({super.key, required this.controller, this.focusNode, this.dense = true});
+  @override
+  State<WhatForField> createState() => _WhatForFieldState();
+}
+
+class _WhatForFieldState extends State<WhatForField> {
+  FocusNode? _own;
+  FocusNode get _focus => widget.focusNode ?? (_own ??= FocusNode());
+
+  @override
+  void dispose() {
+    _own?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final past = pastDescriptions();
+    return RawAutocomplete<String>(
+      textEditingController: widget.controller,
+      focusNode: _focus,
+      optionsBuilder: (v) {
+        final q = v.text.trim().toLowerCase();
+        if (q.isEmpty) return const Iterable<String>.empty();
+        final starts = past.where((p) => p.toLowerCase().startsWith(q) && p.toLowerCase() != q);
+        final has = past.where((p) => !p.toLowerCase().startsWith(q) && p.toLowerCase().contains(q));
+        return [...starts, ...has].take(6);
+      },
+      fieldViewBuilder: (context, ctl, focus, onSubmit) => TextField(
+        controller: ctl,
+        focusNode: focus,
+        textCapitalization: TextCapitalization.sentences,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => onSubmit(),
+        decoration: InputDecoration(
+          isDense: widget.dense,
+          prefixIcon: const Icon(Icons.notes),
+          hintText: tr('What for? e.g. car oil, school bag (optional)'),
+        ),
+      ),
+      optionsViewBuilder: (context, onSelected, options) => Align(
+        alignment: AlignmentDirectional.topStart,
+        child: Material(
+          elevation: 6,
+          color: lc.card,
+          borderRadius: BorderRadius.circular(14),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 240, maxWidth: 360),
+            child: ListView(padding: const EdgeInsets.symmetric(vertical: 6), shrinkWrap: true, children: [
+              for (final o in options)
+                ListTile(dense: true, leading: const Icon(Icons.history, size: 18), title: Text(o), onTap: () => onSelected(o)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -304,6 +304,13 @@ class _ReviewCardState extends State<ReviewCard> {
   bool remember = true;
   bool showRaw = false;
   late DateTime date;
+  final noteCtl = TextEditingController();
+
+  @override
+  void dispose() {
+    noteCtl.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -325,7 +332,7 @@ class _ReviewCardState extends State<ReviewCard> {
     final messenger = ScaffoldMessenger.of(context);
     final others = await app.confirmSms(widget.item,
         amount: amount, kind: kind, categoryId: categoryId!, merchant: merchant,
-        date: isoDate(date), remember: remember, accountId: accountId);
+        date: isoDate(date), remember: remember, accountId: accountId, note: noteCtl.text);
     if (others > 0) {
       messenger.showSnackBar(SnackBar(
           content: Text(tr('{n} more from {m} were added to {cat} automatically.',
@@ -456,7 +463,9 @@ class _ReviewCardState extends State<ReviewCard> {
                 ]),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
+            WhatForField(controller: noteCtl),
+            const SizedBox(height: 8),
             Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 6, children: [
               for (final k in const [('expense', 'Expense'), ('income', 'Income')])
                 ChoiceChip(

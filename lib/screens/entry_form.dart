@@ -236,10 +236,7 @@ class _EntryFormState extends State<EntryForm> {
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: noteCtl,
-            decoration: InputDecoration(labelText: tr('Note (optional)'), border: const OutlineInputBorder()),
-          ),
+          WhatForField(controller: noteCtl, dense: false),
           if (editing && kind == 'expense') ...[
             const SizedBox(height: 8),
             Align(

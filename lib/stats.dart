@@ -234,3 +234,29 @@ List<Insight> insightsFor(Period per) {
   }
   return out;
 }
+
+
+class ItemTotal {
+  final String name;
+  final double total;
+  final int count;
+  ItemTotal(this.name, this.total, this.count);
+}
+
+/// Spending grouped by the "What for?" description (same text, any case).
+List<ItemTotal> topItems(PeriodStats s, {int limit = 8}) {
+  final totals = <String, double>{};
+  final counts = <String, int>{};
+  final shown = <String, String>{};
+  for (final t in s.list) {
+    final n = t.note.trim();
+    if (t.kind != 'expense' || n.isEmpty || (app.cat(t.categoryId)?.isSaving ?? false)) continue;
+    final k = n.toLowerCase();
+    totals[k] = (totals[k] ?? 0) + t.amount;
+    counts[k] = (counts[k] ?? 0) + 1;
+    shown.putIfAbsent(k, () => n);
+  }
+  final out = totals.keys.map((k) => ItemTotal(shown[k]!, totals[k]!, counts[k]!)).toList()
+    ..sort((a, b) => b.total.compareTo(a.total));
+  return out.take(limit).toList();
+}

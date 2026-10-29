@@ -28,7 +28,9 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
   final merchantCtl = TextEditingController();
   final merchantFocus = FocusNode();
   bool autoPicked = false; // category was filled in from the merchant, not tapped
-  String note = '';
+  final noteCtl = TextEditingController();
+  final noteFocus = FocusNode();
+  String get note => noteCtl.text.trim();
   bool saving = false;
 
   String get merchant => merchantCtl.text.trim();
@@ -37,12 +39,15 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
   void initState() {
     super.initState();
     merchantFocus.addListener(() => setState(() {}));
+    noteFocus.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     merchantCtl.dispose();
     merchantFocus.dispose();
+    noteCtl.dispose();
+    noteFocus.dispose();
     super.dispose();
   }
 
@@ -106,22 +111,6 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
     });
   }
 
-  Future<void> _details() async {
-    final nCtl = TextEditingController(text: note);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const T('Add note'),
-        content: TextField(controller: nCtl, autofocus: true, decoration: InputDecoration(labelText: tr('Note (optional)'))),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Save')),
-        ],
-      ),
-    );
-    if (ok == true) setState(() => note = nCtl.text.trim());
-  }
-
   Future<void> _save() async {
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: T('Enter an amount above zero.')));
@@ -159,7 +148,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
       shortcuts = [...shortcuts.take(6), app.cat(extraCategory!)!];
     }
     final today = DateTime.now();
-    final typing = merchantFocus.hasFocus;
+    final typing = merchantFocus.hasFocus || noteFocus.hasFocus;
     final recent = recentMerchants;
     final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
 
@@ -200,7 +189,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
           Expanded(
             child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), children: [
               GestureDetector(
-                onTap: () => merchantFocus.unfocus(),
+                onTap: () => FocusScope.of(context).unfocus(),
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
                 Flexible(
                   child: FittedBox(
@@ -259,6 +248,8 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                   ]),
                 ),
               ],
+              const SizedBox(height: 8),
+              WhatForField(controller: noteCtl, focusNode: noteFocus),
               const SizedBox(height: 10),
               Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
                 pill(Icons.calendar_today_outlined, isToday ? tr('Today') : '${shortDate(date)} ${date.year}', () async {
@@ -270,7 +261,6 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                   );
                   if (d != null) setState(() => date = d);
                 }),
-                pill(Icons.notes, note.isNotEmpty ? note : tr('Add note'), _details),
               ]),
               const SizedBox(height: 18),
               Text(tr('Category'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted)),

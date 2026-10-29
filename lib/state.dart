@@ -39,6 +39,15 @@ class AppState extends ChangeNotifier {
   /// Light/dark: 'system', 'light' or 'dark'.
   final appearance = ValueNotifier<String>('system');
 
+  /// Text to search for when Entries opens (e.g. tapping an item in Insights).
+  final entrySearch = ValueNotifier<String>('');
+
+  /// Opens all entries searched for [text].
+  void searchEntries(String text) {
+    entrySearch.value = text;
+    openActivity(1);
+  }
+
   /// Activity tab: 0 = to review, 1 = all entries.
   final activitySub = ValueNotifier<int>(0);
 

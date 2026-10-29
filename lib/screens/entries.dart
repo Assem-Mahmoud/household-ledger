@@ -22,6 +22,30 @@ class _EntriesScreenState extends State<EntriesScreen> {
   int? categoryFilter;
   int? accountFilter;
   String kindFilter = 'all';
+  final searchCtl = TextEditingController();
+
+  void _external() {
+    if (app.entrySearch.value.isEmpty) return;
+    setState(() {
+      searchCtl.text = app.entrySearch.value;
+      query = app.entrySearch.value;
+    });
+    app.entrySearch.value = '';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    app.entrySearch.addListener(_external);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _external());
+  }
+
+  @override
+  void dispose() {
+    app.entrySearch.removeListener(_external);
+    searchCtl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,10 +109,21 @@ class _EntriesScreenState extends State<EntriesScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
               child: TextField(
+                controller: searchCtl,
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: tr('Search merchant, note, category or amount'),
+                  hintText: tr('Search merchant, item, category or amount'),
                   prefixIcon: const Icon(Icons.search),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: tr('Clear'),
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => setState(() {
+                            searchCtl.clear();
+                            query = '';
+                          }),
+                        ),
                 ),
                 onChanged: (v) => setState(() => query = v),
               ),
