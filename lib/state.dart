@@ -1188,6 +1188,21 @@ class AppState extends ChangeNotifier {
     return linked;
   }
 
+  /// Puts the given entries on one account.
+  Future<void> assignAccount(List<Txn> list, int accountId) async {
+    final batch = db.batch();
+    for (final t in list) {
+      if (t.id == null) continue;
+      batch.update('txns', {'account_id': accountId}, where: 'id = ?', whereArgs: [t.id]);
+      if (t.smsKey != null) {
+        batch.update('sms_inbox', {'account_id': accountId}, where: 'sms_key = ?', whereArgs: [t.smsKey]);
+      }
+    }
+    await batch.commit(noResult: true);
+    await _loadTxns();
+    notifyListeners();
+  }
+
   /// Removes an account; its entries stay, without an account.
   Future<void> deleteAccount(Account a) async {
     await db.update('txns', {'account_id': null}, where: 'account_id = ?', whereArgs: [a.id]);

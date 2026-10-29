@@ -33,7 +33,8 @@ class _EntriesScreenState extends State<EntriesScreen> {
         final list = s.list.where((t) {
           if (kindFilter != 'all' && t.kind != kindFilter) return false;
           if (categoryFilter != null && t.categoryId != categoryFilter) return false;
-          if (accountFilter != null && t.accountId != accountFilter) return false;
+          if (accountFilter == -1 && app.account(t.accountId) != null) return false; // -1 = no account
+          if (accountFilter != null && accountFilter != -1 && t.accountId != accountFilter) return false;
           if (q.isEmpty) return true;
           final c = '${app.cat(t.categoryId)?.name.toLowerCase() ?? ''} ${app.cat(t.categoryId)?.display.toLowerCase() ?? ''}';
           return t.merchant.toLowerCase().contains(q) || t.note.toLowerCase().contains(q) || c.contains(q) ||
@@ -97,8 +98,16 @@ class _EntriesScreenState extends State<EntriesScreen> {
                   Padding(
                     padding: const EdgeInsetsDirectional.only(end: 8),
                     child: InputChip(
-                      label: Text(accountFilter == null ? tr('Any account') : app.account(accountFilter)?.name ?? ''),
-                      avatar: Icon(accountFilter == null ? Icons.credit_card : accountIcon(app.account(accountFilter)?.type ?? 'bank'), size: 18),
+                      label: Text(accountFilter == null
+                          ? tr('Any account')
+                          : accountFilter == -1
+                              ? tr('No account')
+                              : app.account(accountFilter)?.name ?? ''),
+                      avatar: Icon(
+                          accountFilter == null || accountFilter == -1
+                              ? Icons.credit_card
+                              : accountIcon(app.account(accountFilter)?.type ?? 'bank'),
+                          size: 18),
                       onDeleted: accountFilter == null ? null : () => setState(() => accountFilter = null),
                       onPressed: () async {
                         final id = await showModalBottomSheet<int>(
@@ -111,6 +120,12 @@ class _EntriesScreenState extends State<EntriesScreen> {
                                   title: Text(a.name),
                                   onTap: () => Navigator.pop(c, a.id),
                                 ),
+                              ListTile(
+                                leading: const Icon(Icons.help_outline),
+                                title: const T('No account'),
+                                subtitle: const T('Entries not linked to any account yet'),
+                                onTap: () => Navigator.pop(c, -1),
+                              ),
                             ]),
                           ),
                         );
@@ -146,6 +161,32 @@ class _EntriesScreenState extends State<EntriesScreen> {
                 ),
               ]),
             ),
+            if (accountFilter == -1 && list.isNotEmpty && app.activeAccounts.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: FilledButton.tonalIcon(
+                  icon: const Icon(Icons.credit_card),
+                  label: Text(trn(list.length, 'Assign this entry to an account', 'Assign these {n} entries to an account')),
+                  onPressed: () async {
+                    final id = await showModalBottomSheet<int>(
+                      context: context,
+                      builder: (c) => SafeArea(
+                        child: ListView(shrinkWrap: true, children: [
+                          for (final a in app.activeAccounts)
+                            ListTile(leading: Icon(accountIcon(a.type)), title: Text(a.name), onTap: () => Navigator.pop(c, a.id)),
+                        ]),
+                      ),
+                    );
+                    if (id == null) return;
+                    final n = list.length;
+                    await app.assignAccount(list, id);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(tr('{n} entries moved to {a}.', {'n': n, 'a': app.account(id)?.name ?? ''}))));
+                    }
+                  },
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Row(children: [
