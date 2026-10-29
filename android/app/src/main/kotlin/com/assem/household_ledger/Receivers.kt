@@ -118,6 +118,10 @@ class SmsReceiver : BroadcastReceiver() {
             n.isNotEmpty() && from.isNotEmpty() && (from.contains(n) || n.contains(from))
         }
         if (!taught && transaction.none { lower.contains(it) }) return
+        // merchants you've already categorised go straight into your entries: nothing to review
+        val flat = lower.replace(Regex("\\s+"), " ")
+        val auto = (prefs.getString("autoKeys", "") ?: "").split("\n").any { k -> k.length >= 3 && flat.contains(k) }
+        if (auto) return
         val blocked = prefs.getString("blockedSenders", "") ?: ""
         if (from.isNotEmpty() && blocked.split("\n").any { b ->
                 val n = b.lowercase().replace(Regex("[^a-z0-9\u0600-\u06ff]"), "")

@@ -183,6 +183,13 @@ class AppState extends ChangeNotifier {
         if (a.learned != b.learned) return a.learned ? -1 : 1;
         return b.keyword.length.compareTo(a.keyword.length);
       });
+    _syncAutoKeys();
+  }
+
+  /// Tells the Android SMS alert which merchants are added without review, so it stays quiet for them.
+  Future<void> _syncAutoKeys() async {
+    final keys = autoConfirm ? rules.where((r) => r.learned && r.keyword.length >= 3).map((r) => r.keyword) : const <String>[];
+    await Native.setPrefText('autoKeys', keys.join('\n'));
   }
 
   Future<void> _loadPending() async {
@@ -228,6 +235,7 @@ class AppState extends ChangeNotifier {
     if (key == 'cycleDay') period = periodFor(DateTime.now(), cycleStartDay);
     // the new-SMS notification (Android side) skips senders you blocked
     if (key == 'blockedSenders') await Native.setPrefText('blockedSenders', value);
+    if (key == 'autoConfirm') await _syncAutoKeys();
     if (notify) notifyListeners();
   }
 
