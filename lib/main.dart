@@ -29,10 +29,10 @@ class LedgerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Changing the language rebuilds the whole app so every screen picks up the new texts.
-    return ValueListenableBuilder<String>(
-      valueListenable: app.language,
-      builder: (context, _, __) => MaterialApp(
-        key: ValueKey(lang),
+    return ListenableBuilder(
+      listenable: Listenable.merge([app.language, app.resets]),
+      builder: (context, _) => MaterialApp(
+        key: ValueKey('$lang-${app.resets.value}'),
         title: 'Household Ledger',
         debugShowCheckedModeBanner: false,
         theme: _theme(Brightness.light),
@@ -78,14 +78,13 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed && app.flag('onboarded')) {
       app.checkPlanReminders();
       if (app.flag('smsOn')) app.scanSms();
+      app.autoBackupIfDue();
     }
   }
 
-  static bool _started = false;
-
   Future<void> _firstRun() async {
-    if (_started || !app.flag('onboarded')) return; // runs once, after setup is done
-    _started = true;
+    if (app.firstRunDone || !app.flag('onboarded')) return; // runs once, after setup is done
+    app.firstRunDone = true;
     await app.applyReminder();
     await app.checkPlanReminders();
     if (app.flag('smsOn')) {
@@ -94,6 +93,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     }
+    await app.autoBackupIfDue();
   }
 
   @override

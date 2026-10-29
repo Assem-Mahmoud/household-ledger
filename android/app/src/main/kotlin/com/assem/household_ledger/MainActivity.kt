@@ -10,6 +10,7 @@ import java.io.File
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -22,6 +23,7 @@ class MainActivity : FlutterActivity() {
 
     private var pendingPermissionResult: MethodChannel.Result? = null
     private var pendingPickResult: MethodChannel.Result? = null
+    private var pendingCreateResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -121,6 +123,80 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
+                    // Let the user choose where the automatic backup lives (Google Drive, a folder…).
+                    "createBackupFile" -> {
+                        pendingCreateResult?.success(null)
+                        pendingCreateResult = result
+                        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "application/json"
+                            putExtra(Intent.EXTRA_TITLE, call.argument<String>("name") ?: "household-ledger-backup.json")
+                        }
+                        try {
+                            startActivityForResult(intent, CREATE_REQUEST)
+                        } catch (e: ActivityNotFoundException) {
+                            pendingCreateResult = null
+                            result.error("no_picker", "No file picker available", null)
+                        }
+                    }
+
+                    // Overwrite the chosen backup file (permission kept across restarts).
+                    "writeUri" -> {
+                        val uri = Uri.parse(call.argument<String>("uri") ?: "")
+                        val bytes = (call.argument<String>("content") ?: "").toByteArray(Charsets.UTF_8)
+                        Thread {
+                            try {
+                                val stream = try {
+                                    contentResolver.openOutputStream(uri, "wt")
+                                } catch (e: Exception) {
+                                    contentResolver.openOutputStream(uri, "w")
+                                }
+                                val out = stream ?: throw IllegalStateException("cannot open")
+                                out.use { it.write(bytes) }
+                                runOnUiThread { result.success(true) }
+                            } catch (e: Exception) {
+                                runOnUiThread { result.error("write_failed", e.message, null) }
+                            }
+                        }.start()
+                    }
+
+                    "uriLabel" -> {
+                        val uri = Uri.parse(call.argument<String>("uri") ?: "")
+                        var name = ""
+                        try {
+                            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                                if (it.moveToFirst()) name = it.getString(0) ?: ""
+                            }
+                        } catch (e: Exception) {
+                        }
+                        val where = when {
+                            (uri.authority ?: "").contains("com.google.android.apps.docs") -> "Google Drive"
+                            (uri.authority ?: "").contains("onedrive") -> "OneDrive"
+                            (uri.authority ?: "").contains("externalstorage") -> "Phone storage"
+                            (uri.authority ?: "").contains("downloads") -> "Downloads"
+                            else -> uri.authority ?: ""
+                        }
+                        result.success(mapOf("name" to name, "where" to where))
+                    }
+
+                    // Share sheet: WhatsApp, email, Drive, Files…
+                    "shareFile" -> {
+                        try {
+                            result.success(
+                                emailFile(
+                                    call.argument<String>("content") ?: "",
+                                    call.argument<String>("fileName") ?: "backup.json",
+                                    "",
+                                    call.argument<String>("subject") ?: "",
+                                    call.argument<String>("body") ?: "",
+                                    chooser = true
+                                )
+                            )
+                        } catch (e: Exception) {
+                            result.error("share_failed", e.message, null)
+                        }
+                    }
+
                     "pickFile" -> {
                         pendingPickResult?.success(null)
                         pendingPickResult = result
@@ -164,7 +240,9 @@ class MainActivity : FlutterActivity() {
     }
 
     /** Writes the file privately and opens Gmail (or any mail app) with it attached. Returns the app used. */
-    private fun emailFile(content: String, fileName: String, to: String, subject: String, body: String): String {
+    private fun emailFile(
+        content: String, fileName: String, to: String, subject: String, body: String, chooser: Boolean = false
+    ): String {
         val safeName = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_")
         val dir = BackupProvider.dir(this)
         dir.listFiles()?.forEach { if (it.name != safeName) it.delete() }
@@ -180,6 +258,10 @@ class MainActivity : FlutterActivity() {
             clipData = ClipData.newRawUri(safeName, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+        if (chooser) {
+            startActivity(Intent.createChooser(send, subject).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            return "chooser"
+        }
         val gmail = Intent(send).setPackage("com.google.android.gm")
         return try {
             startActivity(gmail)
@@ -193,6 +275,23 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Uses the platform activity-result API, which FlutterActivity still forwards")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == CREATE_REQUEST) {
+            val cb = pendingCreateResult ?: return
+            pendingCreateResult = null
+            val uri = data?.data
+            if (resultCode != Activity.RESULT_OK || uri == null) {
+                cb.success(null)
+                return
+            }
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+            }
+            cb.success(uri.toString())
+            return
+        }
         if (requestCode != PICK_REQUEST) return
         val callback = pendingPickResult ?: return
         pendingPickResult = null
@@ -239,6 +338,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val PERMISSION_REQUEST = 4711
         private const val PICK_REQUEST = 4712
+        private const val CREATE_REQUEST = 4713
         const val POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"
     }
 }

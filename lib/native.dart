@@ -44,6 +44,32 @@ class Native {
     return r ?? 'chooser';
   }
 
+  /// Asks where to keep the automatic backup (Google Drive, a folder…). Returns its address or null.
+  static Future<String?> createBackupFile(String name) => _ch.invokeMethod<String>('createBackupFile', {'name': name});
+
+  /// Overwrites the chosen backup file. Returns false when it can't be written (e.g. access was removed).
+  static Future<bool> writeUri(String uri, String content) async {
+    try {
+      return await _ch.invokeMethod<bool>('writeUri', {'uri': uri, 'content': content}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Where a chosen file lives: {'name': file name, 'where': 'Google Drive' | 'Downloads' | …}.
+  static Future<Map<String, String>> uriLabel(String uri) async {
+    try {
+      final r = await _ch.invokeMapMethod<String, String>('uriLabel', {'uri': uri});
+      return r ?? {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Opens the share sheet (WhatsApp, email, Drive…) with [content] attached as [fileName].
+  static Future<void> shareFile({required String content, required String fileName, required String subject, String body = ''}) =>
+      _ch.invokeMethod('shareFile', {'content': content, 'fileName': fileName, 'subject': subject, 'body': body});
+
   /// Lets the user pick a file (Downloads, Drive, Gmail attachment…) and returns its text, or null if cancelled.
   static Future<String?> pickFileText() => _ch.invokeMethod<String>('pickFile');
 

@@ -207,7 +207,7 @@ class SettingsScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               child: T(
-                  'Data is stored only on this phone. Uninstalling the app deletes it, so keep a recent backup in Gmail.',
+                  'Data is stored only on this phone. Turn on automatic backup so a copy is kept on Google Drive.',
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5)),
             ),
           ]),
@@ -725,44 +725,13 @@ class _SendersScreenState extends State<SendersScreen> {
   }
 }
 
-/// Asks for the backup address the first time, then opens Gmail with the backup attached.
-Future<void> emailBackupFlow(BuildContext context) async {
-  if ((app.settings['backupEmail'] ?? '').isEmpty) {
-    final ctl = TextEditingController();
-    final email = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const T('Where should backups go?'),
-        content: TextField(
-          controller: ctl,
-          autofocus: true,
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(
-            labelText: tr('Your Gmail address'),
-            helperText: tr('Saved for next time. You can change it in Settings.'),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const T('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, ctl.text.trim()), child: const T('Continue')),
-        ],
-      ),
-    );
-    if (email == null) return;
-    if (email.isNotEmpty) await app.setSetting('backupEmail', email);
-  }
+/// Opens the share sheet with a backup file (WhatsApp, email, Drive…).
+Future<void> shareBackupFlow(BuildContext context) async {
   try {
-    final how = await app.emailBackup();
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(tr(how == 'gmail'
-            ? 'Gmail opened with the backup attached. Tap Send to finish.'
-            : 'Choose your mail app, then tap Send to finish.')),
-      ));
-    }
+    await app.shareBackup();
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not open email: {e}', {'e': e}))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not share the backup: {e}', {'e': e}))));
     }
   }
 }
@@ -775,24 +744,113 @@ Future<void> importStatementFlow(BuildContext context) => const SettingsScreen()
 
 // ---------------------------------------------------------------- backup
 
-/// Backup to Gmail, restore from a file, and spreadsheet export in one place.
+/// Automatic backup to a chosen place (e.g. Google Drive), sharing, restore, export and start fresh.
 class BackupScreen extends StatelessWidget {
   const BackupScreen({super.key});
 
-  Future<void> _emailCsv(BuildContext context) async {
+  Future<void> _shareCsv(BuildContext context) async {
     try {
-      await Native.emailFile(
+      await Native.shareFile(
         content: app.exportCsv(),
         fileName: 'household-ledger-${isoDate(DateTime.now())}.csv',
-        to: app.settings['backupEmail'] ?? '',
         subject: tr('Household Ledger entries {d}', {'d': isoDate(DateTime.now())}),
         body: tr('All entries as CSV.'),
       );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not open email: {e}', {'e': e}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Could not share the backup: {e}', {'e': e}))));
       }
     }
+  }
+
+  Future<void> _choose(BuildContext context) async {
+    final ok = await app.chooseBackupLocation();
+    if (!context.mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: T('Backup saved. It will be updated automatically every day.')));
+    } else if (app.backupUri.isNotEmpty && app.backupFailed) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: T('Could not write the backup there. Try another place.')));
+    }
+  }
+
+  Future<void> _backupNow(BuildContext context) async {
+    final ok = await app.backupNow();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: T(ok ? 'Backup updated.' : 'Could not write the backup. Choose the location again.')));
+    }
+  }
+
+  Future<void> _deleteEntries(BuildContext context) async {
+    final now = DateTime.now();
+    var from = 'month';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setState) => AlertDialog(
+          title: const T('Delete all entries?'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const T('All entries and the SMS review list are deleted. Your categories, accounts, budgets, plan, '
+                'yearly expenses and merchant rules are kept. Take a backup first if you may need the data.'),
+            const SizedBox(height: 14),
+            const T('Read bank SMS again from', style: TextStyle(fontWeight: FontWeight.w600)),
+            RadioListTile<String>(
+              contentPadding: EdgeInsets.zero,
+              value: 'month',
+              groupValue: from,
+              title: Text(tr('The start of this month ({d})', {'d': shortDate(periodFor(now, app.cycleStartDay).start)})),
+              onChanged: (v) => setState(() => from = v!),
+            ),
+            RadioListTile<String>(
+              contentPadding: EdgeInsets.zero,
+              value: 'today',
+              groupValue: from,
+              title: const T('Today'),
+              onChanged: (v) => setState(() => from = v!),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: badColor),
+              onPressed: () => Navigator.pop(c, true),
+              child: const T('Delete entries'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    await app.deleteAllEntries(from == 'today' ? now : periodFor(now, app.cycleStartDay).start);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: T('All entries deleted. Starting fresh.')));
+    if (app.flag('smsOn')) {
+      final msg = await app.scanSms();
+      if (context.mounted && msg.isNotEmpty) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  Future<void> _resetApp(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const T('Reset the app?'),
+        content: const T('Everything is deleted: entries, categories, accounts, budgets, plan and settings. '
+            'The app starts again with first-time setup. This cannot be undone unless you have a backup.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: badColor),
+            onPressed: () => Navigator.pop(c, true),
+            child: const T('Reset everything'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    await app.resetApp();
   }
 
   @override
@@ -801,68 +859,94 @@ class BackupScreen extends StatelessWidget {
       listenable: app,
       builder: (context, _) {
         final cs = Theme.of(context).colorScheme;
-        final email = app.settings['backupEmail'] ?? '';
         final days = app.daysSinceBackup;
-        Widget card(List<Widget> children) => Container(
+        final hasPlace = app.backupUri.isNotEmpty;
+        Widget card(List<Widget> children, {Color? border}) => Container(
               margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                border: Border.all(color: cs.outlineVariant),
+                border: Border.all(color: border ?? cs.outlineVariant),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
             );
+        final last = days == null
+            ? tr('Never backed up')
+            : days == 0
+                ? tr('Last backup: today')
+                : trn(days, 'Last backup: {n} day ago', 'Last backup: {n} days ago');
         return Scaffold(
           appBar: AppBar(title: const T('Backup & restore')),
           body: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
-            Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: warnColor.withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.info_outline, color: warnColor),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: T('Your data lives only on this phone. Uninstalling the app or changing phones deletes it unless you keep a backup.',
-                      style: TextStyle(height: 1.45, color: cs.onSurface)),
-                ),
-              ]),
-            ),
             card([
-              const T('Back up to Gmail', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 10),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.alternate_email),
-                title: const T('Send backups to'),
-                subtitle: Text(email.isEmpty ? tr('Not set — Gmail opens with an empty "To"') : email),
-                trailing: const Icon(Icons.edit_outlined, size: 20),
-                onTap: () => const SettingsScreen()._editText(context, 'Backup email', 'backupEmail',
-                    help: 'Backups are emailed here, usually your own Gmail address.'),
-              ),
-              Text(
-                days == null
-                    ? tr('Never backed up')
-                    : days == 0
-                        ? tr('Last backup: today')
-                        : trn(days, 'Last backup: {n} day ago', 'Last backup: {n} days ago'),
-                style: TextStyle(color: app.backupDue ? warnColor : cs.onSurfaceVariant, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-                onPressed: () => emailBackupFlow(context),
-                icon: const Icon(Icons.backup_outlined),
-                label: const T('Email a backup now'),
-              ),
+              const T('Automatic backup', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
-              T('Gmail opens with the backup attached — tap Send to finish.',
-                  style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+              T(
+                  hasPlace
+                      ? 'The backup file is updated every day when you open the app. On a new phone, install the app and restore it from there.'
+                      : 'Like WhatsApp: choose a place once, ideally Google Drive, and the app keeps a backup file there, updated every day. On a new phone, restore from that file.',
+                  style: TextStyle(height: 1.45, color: cs.onSurfaceVariant)),
+              const SizedBox(height: 12),
+              if (hasPlace) ...[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(app.backupWhere.contains('Drive') ? Icons.add_to_drive : Icons.folder_outlined),
+                  title: Text(app.backupWhere.isEmpty ? tr('Chosen location') : app.backupWhere),
+                  subtitle: Text(app.backupFailed ? tr('The last backup could not be written') : last,
+                      style: TextStyle(color: app.backupFailed ? badColor : null)),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const T('Back up automatically every day'),
+                  value: app.flag('autoBackup'),
+                  onChanged: (v) => app.setSetting('autoBackup', v ? '1' : '0'),
+                ),
+                Row(children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      onPressed: () => _backupNow(context),
+                      icon: const Icon(Icons.backup_outlined),
+                      label: const T('Back up now'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                    onPressed: () => _choose(context),
+                    child: const T('Change place'),
+                  ),
+                ]),
+              ] else
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                  onPressed: () => _choose(context),
+                  icon: const Icon(Icons.add_to_drive),
+                  label: const T('Choose where to keep it'),
+                ),
+              if (!hasPlace) ...[
+                const SizedBox(height: 6),
+                T('In the window that opens, tap ☰ and choose Drive, pick a folder, then Save.',
+                    style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+              ],
+            ]),
+            card([
+              const T('Send a copy', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              T('Send the backup file to yourself on WhatsApp or by email, or save it anywhere.',
+                  style: TextStyle(height: 1.45, color: cs.onSurfaceVariant)),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                onPressed: () => shareBackupFlow(context),
+                icon: const Icon(Icons.share_outlined),
+                label: const T('Share backup file'),
+              ),
             ]),
             card([
               const T('Restore', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
-              T('Pick a backup file saved from Gmail, Downloads or Drive. It replaces everything currently in the app.',
+              T('Pick a backup file from Google Drive, WhatsApp, email or Downloads. It replaces everything currently in the app.',
                   style: TextStyle(height: 1.45, color: cs.onSurfaceVariant)),
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -882,9 +966,9 @@ class BackupScreen extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
-                    onPressed: () => _emailCsv(context),
-                    icon: const Icon(Icons.mail_outline),
-                    label: const T('Email CSV'),
+                    onPressed: () => _shareCsv(context),
+                    icon: const Icon(Icons.share_outlined),
+                    label: const T('Share CSV'),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -902,6 +986,23 @@ class BackupScreen extends StatelessWidget {
                   ),
                 ),
               ]),
+            ]),
+            card(border: badColor.withOpacity(0.5), [
+              const T('Start fresh', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: badColor)),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46), foregroundColor: badColor),
+                onPressed: () => _deleteEntries(context),
+                icon: const Icon(Icons.delete_sweep_outlined),
+                label: const T('Delete all entries (keep my setup)'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46), foregroundColor: badColor),
+                onPressed: () => _resetApp(context),
+                icon: const Icon(Icons.restart_alt),
+                label: const T('Reset the app completely'),
+              ),
             ]),
           ]),
         );

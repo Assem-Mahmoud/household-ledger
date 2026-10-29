@@ -1397,22 +1397,94 @@ class AppState extends ChangeNotifier {
     return const JsonEncoder.withIndent(' ').convert(data);
   }
 
-  /// Opens Gmail with a full backup attached. The user taps Send.
-  Future<String> emailBackup() async {
+  /// Where the automatic backup is kept (a file the user chose once, e.g. on Google Drive).
+  String get backupUri => settings['backupUri'] ?? '';
+  String get backupWhere => settings['backupWhere'] ?? '';
+  bool get backupFailed => settings['backupFailed'] == '1';
+
+  /// Asks where to keep the backup, then writes the first copy. Returns false if cancelled or it failed.
+  Future<bool> chooseBackupLocation() async {
+    final uri = await Native.createBackupFile('household-ledger-backup.json');
+    if (uri == null || uri.isEmpty) return false;
+    final label = await Native.uriLabel(uri);
+    final where = [label['where'] ?? '', label['name'] ?? ''].where((x) => x.isNotEmpty).join(' · ');
+    await setSetting('backupUri', uri, notify: false);
+    await setSetting('backupWhere', where, notify: false);
+    await setSetting('autoBackup', '1', notify: false);
+    return backupNow();
+  }
+
+  /// Overwrites the backup file with everything in the app.
+  Future<bool> backupNow() async {
+    if (backupUri.isEmpty) return false;
+    final ok = await Native.writeUri(backupUri, await backupJson());
+    if (ok) await setSetting('lastBackup', '${DateTime.now().millisecondsSinceEpoch}', notify: false);
+    await setSetting('backupFailed', ok ? '0' : '1');
+    return ok;
+  }
+
+  /// Daily automatic backup, run when the app opens.
+  Future<void> autoBackupIfDue() async {
+    if (backupUri.isEmpty || !flag('autoBackup') || txns.isEmpty) return;
+    final d = daysSinceBackup;
+    if (d != null && d < 1) return;
+    await backupNow();
+  }
+
+  /// Share sheet with a backup file attached (WhatsApp, email, Drive…).
+  Future<void> shareBackup() async {
     final now = DateTime.now();
-    final name = 'household-ledger-backup-${isoDate(now)}.json';
-    final json = await backupJson();
-    final how = await Native.emailFile(
-      content: json,
-      fileName: name,
-      to: settings['backupEmail'] ?? '',
+    await Native.shareFile(
+      content: await backupJson(),
+      fileName: 'household-ledger-backup-${isoDate(now)}.json',
       subject: tr('Household Ledger backup {d}', {'d': isoDate(now)}),
-      body: tr('Backup of {n} entries, created {d}.\n'
-          'To restore: save the attached file, then in the app open Settings → Restore from backup.',
+      body: tr('Backup of {n} entries, created {d}. To restore: open the app, Settings → Backup & restore → Choose backup file.',
           {'n': txns.length, 'd': '${isoDate(now)} ${two(now.hour)}:${two(now.minute)}'}),
     );
-    await setSetting('lastBackup', '${now.millisecondsSinceEpoch}');
-    return how;
+    if (backupUri.isEmpty) await setSetting('lastBackup', '${now.millisecondsSinceEpoch}');
+  }
+
+  // ------------------------------------------------------------ start fresh
+
+  /// Deletes every entry and the SMS review history; keeps categories, accounts, budgets, plan,
+  /// yearly expenses and merchant rules. Bank SMS are read again only from [smsFrom].
+  Future<void> deleteAllEntries(DateTime smsFrom) async {
+    await db.transaction((tx) async {
+      for (final t in ['txns', 'sms_inbox', 'alerts', 'plan_status', 'fund_status']) {
+        await tx.delete(t);
+      }
+    });
+    final start = DateTime(smsFrom.year, smsFrom.month, smsFrom.day).millisecondsSinceEpoch;
+    await setSetting('smsStartFrom', '$start', notify: false);
+    await setSetting('smsLastScan', '${start - 1}', notify: false);
+    reviewWindow = null;
+    lastAutoAdded = 0;
+    await _loadTxns();
+    await _loadPending();
+    await _loadPlans();
+    await _loadFunds();
+    period = periodFor(DateTime.now(), cycleStartDay);
+    notifyListeners();
+  }
+
+  /// Bumped when the app is reset, so the whole UI starts over with first-run setup.
+  final resets = ValueNotifier<int>(0);
+  bool firstRunDone = false;
+
+  /// Deletes everything and returns to first-run setup.
+  Future<void> resetApp() async {
+    await Native.cancelReminder();
+    for (final k in ['blockedSenders', 'taughtSenders', 'autoKeys']) {
+      await Native.setPrefText(k, '');
+    }
+    final path = db.path;
+    await db.close();
+    await deleteDatabase(path);
+    await init();
+    firstRunDone = false;
+    tab.value = 0;
+    resets.value++;
+    notifyListeners();
   }
 
   int? get daysSinceBackup {
@@ -1421,7 +1493,7 @@ class AppState extends ChangeNotifier {
     return DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ms)).inDays;
   }
 
-  bool get backupDue => txns.isNotEmpty && (daysSinceBackup == null || daysSinceBackup! >= 7);
+  bool get backupDue => txns.isNotEmpty && (backupFailed || daysSinceBackup == null || daysSinceBackup! >= 7);
 
   /// Summary of a backup file before restoring, or null if it isn't one.
   String? describeBackup(String text) {
@@ -1441,6 +1513,9 @@ class AppState extends ChangeNotifier {
     final d = jsonDecode(text) as Map<String, dynamic>;
     if (d['app'] != 'household_ledger') return tr('This file is not a Household Ledger backup.');
     final keepBackupInfo = {'backupEmail': settings['backupEmail'], 'lastBackup': settings['lastBackup']};
+    final thisPhone = {
+      for (final k in ['backupUri', 'backupWhere', 'autoBackup', 'backupFailed']) k: settings[k],
+    };
     await db.transaction((tx) async {
       for (final t in _backupTables) {
         final rows = d[t];
@@ -1459,6 +1534,11 @@ class AppState extends ChangeNotifier {
     for (final e in keepBackupInfo.entries) {
       if (e.value != null && (settings[e.key] ?? '').isEmpty) await setSetting(e.key, e.value!, notify: false);
     }
+    // the backup location belongs to this phone, not to the phone the backup came from
+    for (final e in thisPhone.entries) {
+      await setSetting(e.key, e.value ?? '', notify: false);
+    }
+    await setSetting('onboarded', '1', notify: false);
     await _loadCategories();
     await _loadTxns();
     await _loadOverrides();

@@ -102,14 +102,16 @@ class HomeScreen extends StatelessWidget {
                       child: ListTile(
                         leading: const Icon(Icons.backup_outlined, color: warnColor),
                         title: Text(
-                          app.daysSinceBackup == null
-                              ? tr('Back up your data to Gmail')
-                              : tr('Last backup was {n} days ago', {'n': app.daysSinceBackup}),
+                          app.backupFailed
+                              ? tr('The last automatic backup failed')
+                              : app.backupUri.isEmpty
+                                  ? tr('Turn on automatic backup')
+                                  : tr('Last backup was {n} days ago', {'n': app.daysSinceBackup}),
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         subtitle: const T('Your entries live only on this phone'),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () => emailBackupFlow(context),
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen())),
                       ),
                     ),
                   ),
