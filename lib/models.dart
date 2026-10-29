@@ -1,6 +1,7 @@
 /// Plain data classes stored in SQLite.
 
 import 'i18n.dart';
+import 'funds.dart';
 
 class Category {
   int id;
@@ -73,6 +74,7 @@ class Txn {
   String source; // 'manual' | 'sms' | 'import'
   String? smsKey;
   int createdAt;
+  int? accountId;
 
   Txn({
     this.id,
@@ -85,6 +87,7 @@ class Txn {
     this.source = 'manual',
     this.smsKey,
     int? createdAt,
+    this.accountId,
   }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
   String get label => merchant.isNotEmpty ? merchant : note;
@@ -100,6 +103,7 @@ class Txn {
         source: (m['source'] as String?) ?? 'manual',
         smsKey: m['sms_key'] as String?,
         createdAt: (m['created_at'] as int?) ?? 0,
+        accountId: m['account_id'] as int?,
       );
 
   Map<String, Object?> toMap() => {
@@ -113,6 +117,7 @@ class Txn {
         'source': source,
         'sms_key': smsKey,
         'created_at': createdAt,
+        'account_id': accountId,
       };
 }
 
@@ -127,6 +132,7 @@ class SmsItem {
   final String merchant;
   final String status; // pending | confirmed | ignored
   final int? categoryId;
+  final int? accountId;
 
   SmsItem({
     required this.id,
@@ -139,6 +145,7 @@ class SmsItem {
     required this.merchant,
     required this.status,
     this.categoryId,
+    this.accountId,
   });
 
   factory SmsItem.fromMap(Map<String, Object?> m) => SmsItem(
@@ -152,6 +159,7 @@ class SmsItem {
         merchant: (m['merchant'] as String?) ?? '',
         status: (m['status'] as String?) ?? 'pending',
         categoryId: m['category_id'] as int?,
+        accountId: m['account_id'] as int?,
       );
 }
 
@@ -247,8 +255,11 @@ class PlanLine {
   final bool manualDone;
   final bool overridden;
   final DateTime? due;
+  final Fund? fund; // set for yearly/irregular expenses
+  final bool fundPay; // true in the month the fund's bill is due (or overdue)
 
-  PlanLine(this.item, this.target, this.progress, this.manualDone, this.overridden, this.due);
+  PlanLine(this.item, this.target, this.progress, this.manualDone, this.overridden, this.due,
+      {this.fund, this.fundPay = false});
 
   bool get autoDone => item.categoryId != null && target > 0 && progress >= target - 0.01;
   bool get done => manualDone || autoDone;

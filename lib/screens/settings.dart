@@ -10,6 +10,7 @@ import '../sms_parser.dart';
 import '../state.dart';
 import '../widgets.dart';
 import 'teach.dart';
+import 'profile.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -45,24 +46,12 @@ class SettingsScreen extends StatelessWidget {
             ),
 
             ListTile(
-              title: const T('Period starts on day'),
-              subtitle: Text(app.cycleStartDay == 1
-                  ? tr('Calendar months')
-                  : tr('Day {a} to day {b} of the next month (salary to salary)',
-                      {'a': app.cycleStartDay, 'b': app.cycleStartDay - 1})),
-              trailing: DropdownButton<int>(
-                value: app.cycleStartDay,
-                items: [for (var d = 1; d <= 28; d++) DropdownMenuItem(value: d, child: Text('$d'))],
-                onChanged: (v) => app.setSetting('cycleDay', '${v ?? 1}'),
-              ),
-            ),
-            ListTile(
-              title: const T('Currency'),
-              subtitle: const T('Used to read amounts in bank SMS'),
-              trailing: CurrencyPicker(onChanged: (code) async {
-                await app.setSetting('currency', code);
-                if (context.mounted) await rescanAfterChange(context);
-              }),
+              leading: const Icon(Icons.person_outline),
+              title: const T('Profile, currency & accounts'),
+              subtitle: Text(tr('{c} · month starts on day {d} · {n} accounts',
+                  {'c': app.currencyCode, 'd': app.cycleStartDay, 'n': app.accounts.length})),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
             ),
 
             _header(context, 'Bank SMS'),

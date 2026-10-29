@@ -8,6 +8,7 @@ import '../periods.dart';
 import '../state.dart';
 import '../stats.dart';
 import '../widgets.dart';
+import 'profile.dart' show accountIcon;
 
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
@@ -114,6 +115,29 @@ class AnalyticsScreen extends StatelessWidget {
                       ]),
               ),
 
+              if (app.accounts.isNotEmpty)
+                SectionCard(
+                  title: 'By account',
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    for (final e in (app.byAccount(per).entries.toList()..sort((a, b) => b.value.$1.compareTo(a.value.$1))))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(children: [
+                          Icon(accountIcon(app.account(e.key)?.type ?? 'bank'), size: 18,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text(app.account(e.key)?.name ?? tr('No account'))),
+                          if (e.value.$2 > 0)
+                            Padding(
+                              padding: const EdgeInsetsDirectional.only(end: 12),
+                              child: Text(ltr('+${fmt(e.value.$2)}'),
+                                  style: TextStyle(color: Theme.of(context).colorScheme.primary, fontFeatures: tabular)),
+                            ),
+                          Text(ltr('−${fmt(e.value.$1)}'), style: const TextStyle(fontWeight: FontWeight.w600, fontFeatures: tabular)),
+                        ]),
+                      ),
+                  ]),
+                ),
               SectionCard(
                 title: 'Top merchants',
                 child: merchants.isEmpty

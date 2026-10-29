@@ -9,6 +9,8 @@ import '../state.dart';
 import '../widgets.dart';
 import 'settings.dart' show scanRange;
 import 'teach.dart';
+import 'profile.dart' show accountIcon, editAccount;
+import '../accounts.dart' show cardDigitsIn;
 
 /// Bank SMS waiting for confirmation: check amount, pick category, confirm or ignore.
 class ReviewScreen extends StatelessWidget {
@@ -163,6 +165,7 @@ class _ReviewCardState extends State<ReviewCard> {
   late final TextEditingController merchantCtl;
   late String kind;
   int? categoryId;
+  int? accountId;
   bool remember = true;
   bool showRaw = false;
   late DateTime date;
@@ -175,6 +178,7 @@ class _ReviewCardState extends State<ReviewCard> {
     merchantCtl = TextEditingController(text: it.merchant);
     kind = it.kind;
     categoryId = it.categoryId;
+    accountId = it.accountId;
     date = DateTime.fromMillisecondsSinceEpoch(it.receivedAt);
   }
 
@@ -196,7 +200,7 @@ class _ReviewCardState extends State<ReviewCard> {
     final merchant = merchantCtl.text.trim();
     final others = await app.confirmSms(widget.item,
         amount: amount, kind: kind, categoryId: categoryId!, merchant: merchantCtl.text,
-        date: isoDate(date), remember: remember);
+        date: isoDate(date), remember: remember, accountId: accountId);
     if (others > 0) {
       messenger.showSnackBar(SnackBar(
           content: Text(tr('{n} more from {m} were added to {cat} automatically.',
@@ -339,6 +343,31 @@ class _ReviewCardState extends State<ReviewCard> {
           ],
           onChanged: (v) => setState(() => categoryId = v),
         ),
+        if (app.activeAccounts.isNotEmpty || cardDigitsIn(widget.item.body).isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            for (final a in app.activeAccounts)
+              ChoiceChip(
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(accountIcon(a.type), size: 16),
+                label: Text(a.name),
+                selected: accountId == a.id,
+                onSelected: (v) => setState(() => accountId = v ? a.id : null),
+              ),
+            if (accountId == null)
+              for (final d in cardDigitsIn(widget.item.body).take(1))
+                ActionChip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: const Icon(Icons.add_card, size: 16),
+                  label: Text(tr('Name card {d}', {'d': d})),
+                  onPressed: () async {
+                    await editAccount(context, null, digits: d);
+                    final id = app.accountFor(widget.item.body);
+                    if (mounted && id != null) setState(() => accountId = id);
+                  },
+                ),
+          ]),
+        ],
         Row(children: [
           Checkbox(value: remember, onChanged: (v) => setState(() => remember = v ?? true)),
           const Expanded(child: T('Remember for this merchant', style: TextStyle(fontSize: 13.5))),

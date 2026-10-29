@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart' show ChangeNotifier, ValueNotifier;
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import 'accounts.dart';
 import 'defaults.dart';
 import 'format.dart';
+import 'funds.dart';
 import 'i18n.dart';
 import 'models.dart';
 import 'native.dart';
@@ -41,8 +43,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> init() async {
     final path = p.join(await getDatabasesPath(), 'ledger.db');
-    db = await openDatabase(path, version: 2, onCreate: _create, onUpgrade: (d, from, to) async {
+    db = await openDatabase(path, version: 3, onCreate: _create, onUpgrade: (d, from, to) async {
       if (from < 2) await _createPlanTables(d);
+      if (from < 3) await _upgradeTo3(d);
     });
     await _loadSettings();
     language.value = settings['lang']?.isNotEmpty == true ? settings['lang']! : 'system';
@@ -53,8 +56,28 @@ class AppState extends ChangeNotifier {
     await _loadRules();
     await _loadPending();
     await _loadPlans();
+    await _loadAccounts();
+    await _loadFunds();
     period = periodFor(DateTime.now(), cycleStartDay);
     if (pending.isNotEmpty) await reparsePending(notify: false);
+  }
+
+  /// v3: accounts & cards on entries, yearly expenses (funds) in the plan.
+  Future<void> _upgradeTo3(Database d) async {
+    await d.execute('''CREATE TABLE IF NOT EXISTS accounts(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'bank',
+      digits TEXT, color INTEGER, sort INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0)''');
+    for (final t in ['txns', 'sms_inbox']) {
+      final cols = await d.rawQuery('PRAGMA table_info($t)');
+      if (!cols.any((c) => c['name'] == 'account_id')) await d.execute('ALTER TABLE $t ADD COLUMN account_id INTEGER');
+    }
+    await d.execute('''CREATE TABLE IF NOT EXISTS funds(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, amount REAL NOT NULL, due_date TEXT NOT NULL,
+      saved REAL NOT NULL DEFAULT 0, category_id INTEGER, repeat_months INTEGER NOT NULL DEFAULT 12,
+      archived INTEGER NOT NULL DEFAULT 0)''');
+    await d.execute('''CREATE TABLE IF NOT EXISTS fund_status(
+      period TEXT NOT NULL, fund_id INTEGER NOT NULL, kind TEXT NOT NULL, amount REAL NOT NULL,
+      prev_due TEXT, prev_saved REAL, PRIMARY KEY(period, fund_id, kind))''');
   }
 
   Future<void> _createPlanTables(Database d) async {
@@ -91,6 +114,7 @@ class AppState extends ChangeNotifier {
       period TEXT NOT NULL, scope TEXT NOT NULL, level INTEGER NOT NULL,
       PRIMARY KEY(period, scope, level))''');
     await _createPlanTables(d);
+    await _upgradeTo3(d);
 
     final ids = <String, int>{};
     for (var i = 0; i < seedCategories.length; i++) {
@@ -324,6 +348,7 @@ class AppState extends ChangeNotifier {
   // ---------------------------------------------------------- transactions
 
   Future<void> saveTxn(Txn t) async {
+    if (t.accountId != null && t.source == 'manual') await setSetting('lastAccount', '${t.accountId}', notify: false);
     if (t.id == null) {
       t.id = await db.insert('txns', t.toMap());
       // a card purchase typed in by hand clears its matching bank SMS from Review
@@ -539,16 +564,17 @@ class AppState extends ChangeNotifier {
         final parsed = _accept(sender, body);
         if (parsed == null) continue;
         matched++;
+        final accountId = accountFor(body);
         final key = '$sender|$date';
         final exists = await db.query('sms_inbox', columns: ['id'], where: 'sms_key = ?', whereArgs: [key]);
         if (exists.isNotEmpty) continue;
         // Already entered by hand or imported from a statement? Link it instead of adding it twice.
-        final linkedId = await _linkToExisting(key, date, parsed);
+        final linkedId = await _linkToExisting(key, date, parsed, accountId: accountId);
         if (linkedId != null) {
           await db.insert('sms_inbox', {
             'sms_key': key, 'sender': sender, 'body': body, 'received_at': date,
             'amount': parsed.amount, 'kind': parsed.kind, 'merchant': parsed.merchant, 'status': 'confirmed',
-            'category_id': linkedId,
+            'category_id': linkedId, 'account_id': accountId,
           });
           linked++;
           continue;
@@ -558,12 +584,12 @@ class AppState extends ChangeNotifier {
         if (known != null) {
           final t = Txn(kind: parsed.kind, amount: parsed.amount, categoryId: known,
               date: isoDate(DateTime.fromMillisecondsSinceEpoch(date)), merchant: parsed.merchant,
-              source: 'sms', smsKey: key);
+              source: 'sms', smsKey: key, accountId: accountId);
           await db.insert('txns', t.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
           await db.insert('sms_inbox', {
             'sms_key': key, 'sender': sender, 'body': body, 'received_at': date,
             'amount': parsed.amount, 'kind': parsed.kind, 'merchant': parsed.merchant, 'status': 'confirmed',
-            'category_id': known,
+            'category_id': known, 'account_id': accountId,
           });
           autoAdded.add(t);
           continue;
@@ -571,7 +597,7 @@ class AppState extends ChangeNotifier {
         await db.insert('sms_inbox', {
           'sms_key': key, 'sender': sender, 'body': body, 'received_at': date,
           'amount': parsed.amount, 'kind': parsed.kind, 'merchant': parsed.merchant, 'status': 'pending',
-          'category_id': suggestCategory(parsed.merchant, body, parsed.kind),
+          'category_id': suggestCategory(parsed.merchant, body, parsed.kind), 'account_id': accountId,
         });
         added++;
       }
@@ -610,10 +636,10 @@ class AppState extends ChangeNotifier {
 
   /// Finds an imported or manual entry with the same day, direction and amount that no SMS is linked to yet,
   /// links this SMS to it, and returns its category id. Returns null when there is no such entry.
-  Future<int?> _linkToExisting(String key, int receivedAt, ParsedSms parsed) async {
+  Future<int?> _linkToExisting(String key, int receivedAt, ParsedSms parsed, {int? accountId}) async {
     final day = isoDate(DateTime.fromMillisecondsSinceEpoch(receivedAt));
     final rows = await db.query('txns',
-        columns: ['id', 'category_id', 'merchant'],
+        columns: ['id', 'category_id', 'merchant', 'account_id'],
         where: "date = ? AND kind = ? AND ABS(amount - ?) < 0.01 AND sms_key IS NULL AND source IN ('import', 'manual')",
         whereArgs: [day, parsed.kind, parsed.amount],
         orderBy: 'id',
@@ -625,6 +651,7 @@ class AppState extends ChangeNotifier {
         {
           'sms_key': key,
           if (((r['merchant'] as String?) ?? '').isEmpty && parsed.merchant.isNotEmpty) 'merchant': parsed.merchant,
+          if (r['account_id'] == null && accountId != null) 'account_id': accountId,
         },
         where: 'id = ?',
         whereArgs: [r['id']]);
@@ -679,7 +706,8 @@ class AppState extends ChangeNotifier {
     var n = 0;
     for (final r in rows) {
       final it = SmsItem.fromMap(r);
-      final catId = await _linkToExisting(it.smsKey, it.receivedAt, ParsedSms(it.amount, it.kind, it.merchant));
+      final catId = await _linkToExisting(it.smsKey, it.receivedAt, ParsedSms(it.amount, it.kind, it.merchant),
+          accountId: it.accountId);
       if (catId == null) continue;
       await db.update('sms_inbox', {'status': 'confirmed', 'category_id': catId}, where: 'id = ?', whereArgs: [it.id]);
       n++;
@@ -701,6 +729,7 @@ class AppState extends ChangeNotifier {
       await db.update('sms_inbox', {
         'amount': parsed.amount, 'kind': parsed.kind, 'merchant': parsed.merchant,
         'category_id': suggestCategory(parsed.merchant, it.body, parsed.kind),
+        'account_id': it.accountId ?? accountFor(it.body),
       }, where: 'id = ?', whereArgs: [it.id]);
     }
     await _loadPending();
@@ -739,9 +768,11 @@ class AppState extends ChangeNotifier {
       required String merchant,
       required String date,
       String note = '',
-      bool remember = true}) async {
+      bool remember = true,
+      int? accountId}) async {
     final t = Txn(kind: kind, amount: amount, categoryId: categoryId, date: date,
-        merchant: merchant.trim(), note: note.trim(), source: 'sms', smsKey: it.smsKey);
+        merchant: merchant.trim(), note: note.trim(), source: 'sms', smsKey: it.smsKey,
+        accountId: accountId ?? it.accountId);
     await db.insert('txns', t.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
     await db.update('sms_inbox', {'status': 'confirmed', 'category_id': categoryId}, where: 'id = ?', whereArgs: [it.id]);
     final others = remember ? await learnRule(merchant, categoryId, notify: false) : 0;
@@ -848,7 +879,7 @@ class AppState extends ChangeNotifier {
       if (autoConfirm) {
         final t = Txn(kind: it.kind, amount: it.amount, categoryId: categoryId,
             date: isoDate(DateTime.fromMillisecondsSinceEpoch(it.receivedAt)), merchant: it.merchant,
-            source: 'sms', smsKey: it.smsKey);
+            source: 'sms', smsKey: it.smsKey, accountId: it.accountId);
         await db.insert('txns', t.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
         await db.update('sms_inbox', {'status': 'confirmed', 'category_id': categoryId}, where: 'id = ?', whereArgs: [it.id]);
         added.add(t);
@@ -906,10 +937,10 @@ class AppState extends ChangeNotifier {
 
   String exportCsv() {
     String q(String v) => RegExp(r'[",\n]').hasMatch(v) ? '"${v.replaceAll('"', '""')}"' : v;
-    final out = StringBuffer('date,type,category,amount,merchant,note\n');
+    final out = StringBuffer('date,type,category,amount,merchant,note,account\n');
     for (final t in txns.reversed) {
       out.writeln([t.date, t.kind, cat(t.categoryId)?.name ?? '', fmtAuto(t.amount).replaceAll(',', ''),
-        t.merchant, t.note].map((v) => q(v.toString())).join(','));
+        t.merchant, t.note, account(t.accountId)?.name ?? ''].map((v) => q(v.toString())).join(','));
     }
     return out.toString();
   }
@@ -922,6 +953,15 @@ class AppState extends ChangeNotifier {
     int col(List<String> names) => head.indexWhere((h) => names.contains(h));
     final iDate = col(['date']), iType = col(['type', 'kind']), iCat = col(['category']);
     final iAmt = col(['amount', 'amount_sar']), iNote = col(['note']), iMer = col(['merchant']);
+    final iAcc = col(['account', 'card']);
+    int? accountNamed(String n) {
+      final k = n.trim().toLowerCase();
+      if (k.isEmpty) return null;
+      for (final a in accounts) {
+        if (a.name.toLowerCase() == k || a.digitList.contains(k)) return a.id;
+      }
+      return null;
+    }
     if (iDate < 0 || iAmt < 0) return tr('The header needs at least "date" and "amount" columns.');
     var added = 0, skipped = 0, duplicates = 0;
     // How many entries already exist per day/direction/amount, so re-importing or overlapping
@@ -959,7 +999,7 @@ class AppState extends ChangeNotifier {
       c ??= fallback ?? active(kind).first;
       kind = c.kind;
       batch.insert('txns', Txn(kind: kind, amount: amount.abs(), categoryId: c.id, date: date,
-          note: at(iNote), merchant: at(iMer), source: 'import').toMap());
+          note: at(iNote), merchant: at(iMer), source: 'import', accountId: accountNamed(at(iAcc))).toMap());
       added++;
     }
     await batch.commit(noResult: true);
@@ -1014,6 +1054,7 @@ class AppState extends ChangeNotifier {
       }
       out.add(PlanLine(it, target, progress, status?.$1 ?? false, status?.$2 != null, _dueDate(per, it.dueDay)));
     }
+    out.addAll(_fundLines(per));
     out.sort((a, b) {
       if (a.done != b.done) return a.done ? 1 : -1;
       final ad = a.due, bd = b.due;
@@ -1089,10 +1130,236 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ------------------------------------------------------- accounts & cards
+
+  List<Account> accounts = [];
+
+  Future<void> _loadAccounts() async {
+    accounts = (await db.query('accounts', orderBy: 'sort, id')).map(Account.fromMap).toList();
+  }
+
+  List<Account> get activeAccounts => accounts.where((a) => !a.archived).toList();
+
+  Account? account(int? id) {
+    if (id == null) return null;
+    for (final a in accounts) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
+  int? accountFor(String body) => matchAccount(body, accounts);
+
+  /// Account last used for a manual entry, so the next one starts there.
+  int? get lastAccountId {
+    final id = int.tryParse(settings['lastAccount'] ?? '');
+    return account(id)?.archived == false ? id : null;
+  }
+
+  /// Saves an account. Entries and waiting SMS that mention its digits and have no account yet get it.
+  /// Returns how many existing entries were linked.
+  Future<int> saveAccount(Account a) async {
+    if (a.id == 0) {
+      a.sort = accounts.isEmpty ? 0 : accounts.map((x) => x.sort).reduce(max) + 1;
+      a.color = palette[accounts.length % palette.length];
+      a.id = await db.insert('accounts', a.toMap());
+    } else {
+      await db.update('accounts', a.toMap(), where: 'id = ?', whereArgs: [a.id]);
+    }
+    await _loadAccounts();
+    var linked = 0;
+    if (a.digitList.isNotEmpty && !a.archived) {
+      final rows = await db.query('sms_inbox', columns: ['id', 'sms_key', 'body', 'status'], where: 'account_id IS NULL');
+      final batch = db.batch();
+      for (final r in rows) {
+        if (matchAccount((r['body'] as String?) ?? '', [a]) == null) continue;
+        batch.update('sms_inbox', {'account_id': a.id}, where: 'id = ?', whereArgs: [r['id']]);
+        if (r['status'] == 'confirmed') {
+          batch.update('txns', {'account_id': a.id},
+              where: 'sms_key = ? AND account_id IS NULL', whereArgs: [r['sms_key']]);
+          linked++;
+        }
+      }
+      await batch.commit(noResult: true);
+      await _loadTxns();
+      await _loadPending();
+    }
+    notifyListeners();
+    return linked;
+  }
+
+  /// Removes an account; its entries stay, without an account.
+  Future<void> deleteAccount(Account a) async {
+    await db.update('txns', {'account_id': null}, where: 'account_id = ?', whereArgs: [a.id]);
+    await db.update('sms_inbox', {'account_id': null}, where: 'account_id = ?', whereArgs: [a.id]);
+    await db.delete('accounts', where: 'id = ?', whereArgs: [a.id]);
+    await _loadAccounts();
+    await _loadTxns();
+    await _loadPending();
+    notifyListeners();
+  }
+
+  /// Card/account numbers seen in bank messages that aren't linked to an account yet, most frequent first.
+  Future<List<(String, int)>> unnamedCards() async {
+    final known = {for (final a in accounts) ...a.digitList};
+    final rows = await db.query('sms_inbox', columns: ['body'], where: "status != 'ignored'");
+    final counts = <String, int>{};
+    for (final r in rows) {
+      for (final d in cardDigitsIn((r['body'] as String?) ?? '')) {
+        if (known.any((k) => k.endsWith(d) || d.endsWith(k))) continue;
+        counts[d] = (counts[d] ?? 0) + 1;
+      }
+    }
+    final out = counts.entries.map((e) => (e.key, e.value)).toList()..sort((a, b) => b.$2.compareTo(a.$2));
+    return out;
+  }
+
+  /// Spending and income per account in a period. Key null = entries without an account.
+  Map<int?, (double, double)> byAccount(Period per) {
+    final out = <int?, (double, double)>{};
+    for (final t in txns) {
+      if (!per.contains(t.date)) continue;
+      final cur = out[t.accountId] ?? (0.0, 0.0);
+      final saving = t.kind == 'expense' && (cat(t.categoryId)?.isSaving ?? false);
+      if (saving) continue;
+      out[t.accountId] = t.kind == 'income' ? (cur.$1, cur.$2 + t.amount) : (cur.$1 + t.amount, cur.$2);
+    }
+    return out;
+  }
+
+  String get userName => settings['userName']?.trim() ?? '';
+
+  // ------------------------------------------------------ yearly expenses
+
+  List<Fund> funds = [];
+  /// period -> fund id -> kind ('save' | 'pay') -> (amount, previous due date, previous saved)
+  Map<String, Map<int, Map<String, (double, String?, double?)>>> fundStatus = {};
+
+  Future<void> _loadFunds() async {
+    funds = (await db.query('funds', orderBy: 'due_date, id')).map(Fund.fromMap).toList();
+    fundStatus = {};
+    for (final r in await db.query('fund_status')) {
+      fundStatus
+          .putIfAbsent(r['period'] as String, () => {})
+          .putIfAbsent(r['fund_id'] as int, () => {})[r['kind'] as String] =
+          ((r['amount'] as num).toDouble(), r['prev_due'] as String?, (r['prev_saved'] as num?)?.toDouble());
+    }
+  }
+
+  List<Fund> get activeFunds => funds.where((f) => !f.archived).toList();
+
+  Future<void> saveFund(Fund f) async {
+    if (f.id == 0) {
+      f.id = await db.insert('funds', f.toMap());
+    } else {
+      await db.update('funds', f.toMap(), where: 'id = ?', whereArgs: [f.id]);
+    }
+    await _loadFunds();
+    notifyListeners();
+  }
+
+  Future<void> deleteFund(Fund f) async {
+    await db.delete('funds', where: 'id = ?', whereArgs: [f.id]);
+    await db.delete('fund_status', where: 'fund_id = ?', whereArgs: [f.id]);
+    await _loadFunds();
+    notifyListeners();
+  }
+
+  Period get _currentPeriod => periodFor(DateTime.now(), cycleStartDay);
+
+  /// What to set aside this month for [f] (0 when it is already fully saved).
+  double fundMonthly(Fund f, {Period? from}) {
+    final cur = _currentPeriod;
+    var start = from ?? cur;
+    if (from == null && fundStatus[cur.key]?[f.id]?['save'] != null) start = cur.next;
+    return monthlySetAside(amount: f.amount, savedBefore: f.saved, from: start, due: f.due, startDay: cycleStartDay);
+  }
+
+  List<PlanLine> _fundLines(Period per) {
+    final cur = _currentPeriod;
+    final out = <PlanLine>[];
+    for (final f in funds) {
+      final st = fundStatus[per.key]?[f.id];
+      PlanLine line(String kind, double target, bool done, DateTime? due, {bool pay = false}) => PlanLine(
+          PlanItem(id: -f.id, title: f.title, kind: kind, amount: target, startPeriod: per.key, categoryId: null),
+          target, 0, done, false, due, fund: f, fundPay: pay);
+      final paid = st?['pay'];
+      if (paid != null) {
+        out.add(line('pay', paid.$1, true, paid.$2 == null ? null : parseIso(paid.$2!), pay: true));
+        continue;
+      }
+      if (f.archived) continue;
+      final duePer = periodFor(f.due, cycleStartDay);
+      final cmp = per.key.compareTo(duePer.key);
+      if (cmp == 0 || (cmp > 0 && per.key == cur.key)) {
+        final need = f.amount - f.saved;
+        out.add(line('pay', need > 0 ? need : 0, false, f.due, pay: true));
+      } else if (cmp < 0) {
+        final saved = st?['save'];
+        if (saved != null) {
+          out.add(line('save', saved.$1, true, null));
+        } else if (per.key.compareTo(cur.key) >= 0) {
+          final amount = fundMonthly(f, from: per.key == cur.key ? cur : null);
+          if (amount > 0) out.add(line('save', amount, false, null));
+        }
+      } else if (f.repeatMonths > 0 && per.key.compareTo(cur.key) > 0) {
+        // after this due date: the next cycle is already being saved for
+        out.add(line('save', (f.amount / f.repeatMonths).ceilToDouble(), false, null));
+      }
+    }
+    return out;
+  }
+
+  /// Ticks (or unticks) this month's set-aside for a yearly expense.
+  Future<void> setFundSaved(Period per, Fund f, bool done, double amount) async {
+    final st = fundStatus[per.key]?[f.id]?['save'];
+    if (done && st == null) {
+      await db.insert('fund_status', {'period': per.key, 'fund_id': f.id, 'kind': 'save', 'amount': amount},
+          conflictAlgorithm: ConflictAlgorithm.replace);
+      f.saved += amount;
+    } else if (!done && st != null) {
+      await db.delete('fund_status', where: 'period = ? AND fund_id = ? AND kind = ?', whereArgs: [per.key, f.id, 'save']);
+      f.saved = (f.saved - st.$1).clamp(0, double.infinity).toDouble();
+    } else {
+      return;
+    }
+    await db.update('funds', {'saved': f.saved}, where: 'id = ?', whereArgs: [f.id]);
+    await _loadFunds();
+    notifyListeners();
+  }
+
+  /// Marks a yearly expense as paid: it moves to its next due date (or ends if it was one-off).
+  Future<void> markFundPaid(Period per, Fund f, bool paid) async {
+    final st = fundStatus[per.key]?[f.id]?['pay'];
+    if (paid && st == null) {
+      await db.insert('fund_status', {
+        'period': per.key, 'fund_id': f.id, 'kind': 'pay', 'amount': f.amount,
+        'prev_due': f.dueDate, 'prev_saved': f.saved,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      if (f.repeatMonths > 0) {
+        f.dueDate = isoDate(addMonths(f.due, f.repeatMonths));
+        f.saved = (f.saved - f.amount).clamp(0, double.infinity).toDouble();
+      } else {
+        f.archived = true;
+      }
+    } else if (!paid && st != null) {
+      await db.delete('fund_status', where: 'period = ? AND fund_id = ? AND kind = ?', whereArgs: [per.key, f.id, 'pay']);
+      if (st.$2 != null) f.dueDate = st.$2!;
+      if (st.$3 != null) f.saved = st.$3!;
+      f.archived = false;
+    } else {
+      return;
+    }
+    await db.update('funds', f.toMap(), where: 'id = ?', whereArgs: [f.id]);
+    await _loadFunds();
+    notifyListeners();
+  }
+
   // ------------------------------------------------------- backup / restore
 
   static const _backupTables = [
     'categories', 'txns', 'budget_overrides', 'sms_inbox', 'rules', 'settings', 'alerts', 'plan_items', 'plan_status',
+    'accounts', 'funds', 'fund_status',
   ];
 
   Future<String> backupJson() async {
@@ -1175,6 +1442,8 @@ class AppState extends ChangeNotifier {
     await _loadRules();
     await _loadPending();
     await _loadPlans();
+    await _loadAccounts();
+    await _loadFunds();
     period = periodFor(DateTime.now(), cycleStartDay);
     await applyReminder();
     notifyListeners();

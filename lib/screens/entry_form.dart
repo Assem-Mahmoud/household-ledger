@@ -6,6 +6,8 @@ import '../models.dart';
 import '../periods.dart';
 import '../state.dart';
 import '../widgets.dart';
+import 'plan.dart' show editFund;
+import 'profile.dart' show accountIcon, editAccount;
 
 /// Add or edit a manual entry. "Save & add another" supports quick end-of-day logging.
 class EntryForm extends StatefulWidget {
@@ -20,6 +22,7 @@ class EntryForm extends StatefulWidget {
 class _EntryFormState extends State<EntryForm> {
   late String kind;
   int? categoryId;
+  int? accountId;
   late DateTime date;
   final amountCtl = TextEditingController();
   final merchantCtl = TextEditingController();
@@ -34,6 +37,7 @@ class _EntryFormState extends State<EntryForm> {
     final t = widget.existing;
     kind = t?.kind ?? widget.initialKind ?? 'expense';
     categoryId = t?.categoryId;
+    accountId = t != null ? t.accountId : app.lastAccountId;
     date = t != null ? parseIso(t.date) : DateTime.now();
     if (t != null) {
       amountCtl.text = fmtAuto(t.amount).replaceAll(',', '');
@@ -72,7 +76,8 @@ class _EntryFormState extends State<EntryForm> {
       ..categoryId = categoryId!
       ..date = isoDate(date)
       ..merchant = merchantCtl.text.trim()
-      ..note = noteCtl.text.trim();
+      ..note = noteCtl.text.trim()
+      ..accountId = accountId;
     await app.saveTxn(t);
     if (t.merchant.isNotEmpty) await app.learnRule(t.merchant, t.categoryId);
     if (!mounted) return;
@@ -181,6 +186,27 @@ class _EntryFormState extends State<EntryForm> {
             ],
           ),
           const SizedBox(height: 16),
+          const Eyebrow('Paid from'),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final a in app.activeAccounts)
+              ChoiceChip(
+                avatar: Icon(accountIcon(a.type), size: 18),
+                label: Text(a.name),
+                selected: accountId == a.id,
+                onSelected: (v) => setState(() => accountId = v ? a.id : null),
+              ),
+            ActionChip(
+              avatar: const Icon(Icons.add, size: 18),
+              label: Text(tr(app.activeAccounts.isEmpty ? 'Add account or card' : 'New')),
+              onPressed: () async {
+                final before = app.accounts.length;
+                await editAccount(context, null);
+                if (app.accounts.length > before) setState(() => accountId = app.accounts.last.id);
+              },
+            ),
+          ]),
+          const SizedBox(height: 16),
           InkWell(
             borderRadius: BorderRadius.circular(8),
             onTap: () async {
@@ -212,6 +238,25 @@ class _EntryFormState extends State<EntryForm> {
             controller: noteCtl,
             decoration: InputDecoration(labelText: tr('Note (optional)'), border: const OutlineInputBorder()),
           ),
+          if (editing && kind == 'expense') ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                icon: const Icon(Icons.event_repeat, size: 18),
+                label: const T('This comes every year — plan for it'),
+                onPressed: () {
+                  final t = widget.existing!;
+                  final d = parseIso(t.date);
+                  editFund(context, null,
+                      title: t.label.isNotEmpty ? t.label : app.cat(t.categoryId)?.display,
+                      amount: t.amount,
+                      due: DateTime(d.year + 1, d.month, d.day),
+                      categoryId: t.categoryId);
+                },
+              ),
+            ),
+          ],
           if (error != null) ...[
             const SizedBox(height: 12),
             Text(error!, style: const TextStyle(color: badColor)),

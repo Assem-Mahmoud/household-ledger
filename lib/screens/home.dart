@@ -9,6 +9,7 @@ import '../widgets.dart';
 import 'entry_form.dart';
 import 'plan.dart';
 import 'settings.dart';
+import 'profile.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -39,6 +40,19 @@ class HomeScreen extends StatelessWidget {
           appBar: AppBar(
             title: const PeriodSwitcher(),
             centerTitle: true,
+            leading: IconButton(
+              tooltip: tr('Profile'),
+              icon: app.userName.isEmpty
+                  ? const Icon(Icons.account_circle_outlined)
+                  : CircleAvatar(
+                      radius: 14,
+                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                      child: Text(app.userName.characters.first.toUpperCase(),
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                              color: Theme.of(context).colorScheme.onPrimaryContainer)),
+                    ),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+            ),
             actions: [
               IconButton(
                 tooltip: tr('Settings'),

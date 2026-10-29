@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Category;
 
 import '../format.dart';
+import '../funds.dart';
 import '../i18n.dart';
 import '../models.dart';
 import '../periods.dart';
@@ -61,6 +62,7 @@ class PlanTab extends StatelessWidget {
                     ]),
             ),
             for (final l in lines) PlanTile(l, per: per),
+            const YearlySection(),
           ]),
         );
       },
@@ -80,7 +82,10 @@ class PlanTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final it = line.item;
     final status = line.status;
-    final statusText = switch (status) {
+    final f = line.fund;
+    final statusText = f != null
+        ? _fundStatus(line, f, status)
+        : switch (status) {
       'done' => tr(line.autoDone && !line.manualDone ? 'Done (from entries)' : 'Done'),
       'overdue' => tr('Overdue since {d}', {'d': shortDate(line.due!)}),
       'due' => tr('Due {d}', {'d': shortDate(line.due!)}),
@@ -96,16 +101,21 @@ class PlanTile extends StatelessWidget {
     final tile = Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Checkbox(
         value: line.done,
-        onChanged: line.autoDone && !line.manualDone
-            ? null
-            : (v) => app.setPlanDone(per, it, v ?? false),
+        onChanged: f != null
+            ? (v) => line.fundPay
+                ? app.markFundPaid(per, f, v ?? false)
+                : app.setFundSaved(per, f, v ?? false, line.target)
+            : line.autoDone && !line.manualDone
+                ? null
+                : (v) => app.setPlanDone(per, it, v ?? false),
       ),
       Expanded(
         child: Padding(
           padding: const EdgeInsets.only(top: 10),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
-              Icon(it.kind == 'save' ? Icons.savings_outlined : Icons.receipt_outlined, size: 16, color: cs.onSurfaceVariant),
+              Icon(f != null ? Icons.event_repeat : it.kind == 'save' ? Icons.savings_outlined : Icons.receipt_outlined,
+                  size: 16, color: cs.onSurfaceVariant),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(it.title,
@@ -135,10 +145,247 @@ class PlanTile extends StatelessWidget {
       ),
     ]);
     return InkWell(
-      onTap: () => editPlanItem(context, line),
+      onTap: () => f != null ? editFund(context, f) : editPlanItem(context, line),
       child: Padding(padding: EdgeInsets.symmetric(horizontal: dense ? 0 : 12), child: tile),
     );
   }
+}
+
+String _fundStatus(PlanLine line, Fund f, String status) {
+  if (line.fundPay) {
+    if (line.done) return tr('Paid');
+    final saved = f.saved > 0 ? ' · ${tr('{a} already saved', {'a': fmt(f.saved)})}' : '';
+    final when = status == 'overdue'
+        ? tr('Overdue since {d}', {'d': shortDate(f.due)})
+        : tr('Due {d}', {'d': shortDate(f.due)});
+    return '$when · ${tr('total {a}', {'a': fmt(f.amount)})}$saved';
+  }
+  if (line.done) return tr('Set aside');
+  return tr('Set aside for {d} · {a} of {b} saved',
+      {'d': '${shortDate(f.due)} ${f.due.year}', 'a': fmt(f.saved), 'b': fmt(f.amount)});
+}
+
+/// Yearly and irregular expenses, spread over the months before they are due.
+class YearlySection extends StatelessWidget {
+  const YearlySection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final list = app.activeFunds;
+    return SectionCard(
+      title: 'Yearly & irregular expenses',
+      trailing: TextButton.icon(
+        onPressed: () => editFund(context, null),
+        icon: const Icon(Icons.add, size: 18),
+        label: const T('Add'),
+      ),
+      child: list.isEmpty
+          ? T('Car insurance, school fees, Iqama or registration renewal… Add them with their due date and the app '
+              'works out how much to set aside each month. It appears in your monthly plan automatically.',
+              style: TextStyle(color: cs.onSurfaceVariant, height: 1.4))
+          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              for (final f in list)
+                InkWell(
+                  onTap: () => editFund(context, f),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Row(children: [
+                        Expanded(child: Text(f.title, style: const TextStyle(fontWeight: FontWeight.w600))),
+                        Text(fmt(f.amount), style: const TextStyle(fontWeight: FontWeight.w600, fontFeatures: tabular)),
+                      ]),
+                      const SizedBox(height: 4),
+                      BudgetBar(spent: f.saved, budget: f.amount, color: goodColor),
+                      const SizedBox(height: 4),
+                      Text(
+                        [
+                          tr('Due {d}', {'d': '${shortDate(f.due)} ${f.due.year}'}),
+                          tr('{a} saved', {'a': fmt(f.saved)}),
+                          if (app.fundMonthly(f) > 0)
+                            tr('{a} {cur} a month', {'a': fmt(app.fundMonthly(f)), 'cur': app.currency})
+                          else if (f.saved >= f.amount)
+                            tr('Fully saved'),
+                          if (f.repeatMonths > 0) tr(_repeatLabel(f.repeatMonths)),
+                        ].join(' · '),
+                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5),
+                      ),
+                    ]),
+                  ),
+                ),
+            ]),
+    );
+  }
+}
+
+String _repeatLabel(int months) => switch (months) {
+      12 => 'Every year',
+      6 => 'Every 6 months',
+      3 => 'Every 3 months',
+      0 => 'Only once',
+      _ => 'Every {n} months',
+    };
+
+/// Add or edit a yearly/irregular expense. [title], [amount], [due] and [categoryId] prefill a new one.
+Future<void> editFund(BuildContext context, Fund? existing,
+    {String? title, double? amount, DateTime? due, int? categoryId}) async {
+  final titleCtl = TextEditingController(text: existing?.title ?? title ?? '');
+  final amountCtl = TextEditingController(
+      text: existing != null ? fmtAuto(existing.amount).replaceAll(',', '') : amount != null ? fmtAuto(amount).replaceAll(',', '') : '');
+  final savedCtl = TextEditingController(
+      text: existing != null && existing.saved > 0 ? fmtAuto(existing.saved).replaceAll(',', '') : '');
+  var dueDate = existing?.due ?? due;
+  var repeat = existing?.repeatMonths ?? 12;
+  int? cat = existing?.categoryId ?? categoryId;
+  String? error;
+
+  final action = await showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    builder: (c) => StatefulBuilder(builder: (c, setState) {
+      final a = parseAmount(amountCtl.text) ?? 0;
+      final sv = parseAmount(savedCtl.text) ?? 0;
+      final cur = periodFor(DateTime.now(), app.cycleStartDay);
+      final months = dueDate == null ? 0 : periodsBefore(cur, dueDate!, app.cycleStartDay);
+      final monthly = dueDate == null || a <= 0
+          ? 0.0
+          : monthlySetAside(amount: a, savedBefore: sv, from: cur, due: dueDate!, startDay: app.cycleStartDay);
+      final preview = dueDate == null || a <= 0
+          ? null
+          : a - sv <= 0
+              ? tr('Already fully saved.')
+              : months <= 0
+                  ? tr('Due this month: {a} {cur} still needed.', {'a': fmt(a - sv), 'cur': app.currency})
+                  : trn(months, 'Set aside {a} {cur} a month for {n} month, starting {m}.',
+                      'Set aside {a} {cur} a month for {n} months, starting {m}.',
+                      {'a': fmt(monthly), 'cur': app.currency, 'm': cur.label});
+      return Padding(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(c).viewInsets.bottom + 20),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(tr(existing == null ? 'Add yearly expense' : 'Edit yearly expense'), style: Theme.of(c).textTheme.titleLarge),
+            const SizedBox(height: 14),
+            TextField(
+              controller: titleCtl,
+              autofocus: existing == null && title == null,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                labelText: tr('What is it?'),
+                hintText: tr('e.g. Car insurance, School fees, Iqama renewal'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountCtl,
+              onChanged: (_) => setState(() {}),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(labelText: tr('Amount'), suffixText: app.currency, border: const OutlineInputBorder()),
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () async {
+                final d = await showDatePicker(
+                  context: c,
+                  initialDate: dueDate ?? DateTime.now().add(const Duration(days: 180)),
+                  firstDate: DateTime.now().subtract(const Duration(days: 60)),
+                  lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                );
+                if (d != null) setState(() => dueDate = d);
+              },
+              child: InputDecorator(
+                decoration: InputDecoration(
+                    labelText: tr('Next due date'), border: const OutlineInputBorder(), suffixIcon: const Icon(Icons.event)),
+                child: Text(dueDate == null ? tr('Pick a date') : '${shortDate(dueDate!)} ${dueDate!.year}'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: savedCtl,
+              onChanged: (_) => setState(() {}),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: tr('Already saved for it (optional)'),
+                helperText: tr('Leave empty to start from zero.'),
+                suffixText: app.currency,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              value: repeat,
+              decoration: InputDecoration(labelText: tr('Repeats'), border: const OutlineInputBorder()),
+              items: [
+                for (final m in const [12, 6, 3, 0]) DropdownMenuItem(value: m, child: Text(tr(_repeatLabel(m)))),
+              ],
+              onChanged: (v) => setState(() => repeat = v ?? 12),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int?>(
+              value: cat,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: tr('Category (optional)'), border: const OutlineInputBorder()),
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: T('None')),
+                for (final x in app.active('expense'))
+                  DropdownMenuItem<int?>(
+                    value: x.id,
+                    child: Row(children: [CategoryDot(x.color), const SizedBox(width: 8), Text(x.display)]),
+                  ),
+              ],
+              onChanged: (v) => setState(() => cat = v),
+            ),
+            if (preview != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: Theme.of(c).colorScheme.primaryContainer.withOpacity(0.5), borderRadius: BorderRadius.circular(12)),
+                child: Text(preview, style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ],
+            if (error != null)
+              Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: badColor))),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () {
+                if (titleCtl.text.trim().isEmpty || a <= 0 || dueDate == null) {
+                  setState(() => error = tr('Enter a name, an amount and the due date.'));
+                  return;
+                }
+                Navigator.pop(c, 'save');
+              },
+              child: const T('Save'),
+            ),
+            if (existing != null) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: badColor),
+                onPressed: () => Navigator.pop(c, 'delete'),
+                child: const T('Remove'),
+              ),
+            ],
+          ]),
+        ),
+      );
+    }),
+  );
+  if (action == null) return;
+  if (action == 'delete') {
+    await app.deleteFund(existing!);
+    return;
+  }
+  final f = existing ?? Fund(id: 0, title: '', amount: 0, dueDate: isoDate(dueDate!));
+  f
+    ..title = titleCtl.text.trim()
+    ..amount = parseAmount(amountCtl.text) ?? 0
+    ..dueDate = isoDate(dueDate!)
+    ..saved = parseAmount(savedCtl.text) ?? 0
+    ..repeatMonths = repeat
+    ..categoryId = cat
+    ..archived = false;
+  await app.saveFund(f);
 }
 
 /// Add a new plan item, or edit/remove an existing one.

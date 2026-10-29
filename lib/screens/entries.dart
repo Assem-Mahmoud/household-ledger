@@ -8,6 +8,7 @@ import '../state.dart';
 import '../stats.dart';
 import '../widgets.dart';
 import 'entry_form.dart';
+import 'profile.dart' show accountIcon;
 
 class EntriesScreen extends StatefulWidget {
   const EntriesScreen({super.key});
@@ -18,6 +19,7 @@ class EntriesScreen extends StatefulWidget {
 class _EntriesScreenState extends State<EntriesScreen> {
   String query = '';
   int? categoryFilter;
+  int? accountFilter;
   String kindFilter = 'all';
 
   @override
@@ -31,6 +33,7 @@ class _EntriesScreenState extends State<EntriesScreen> {
         final list = s.list.where((t) {
           if (kindFilter != 'all' && t.kind != kindFilter) return false;
           if (categoryFilter != null && t.categoryId != categoryFilter) return false;
+          if (accountFilter != null && t.accountId != accountFilter) return false;
           if (q.isEmpty) return true;
           final c = '${app.cat(t.categoryId)?.name.toLowerCase() ?? ''} ${app.cat(t.categoryId)?.display.toLowerCase() ?? ''}';
           return t.merchant.toLowerCase().contains(q) || t.note.toLowerCase().contains(q) || c.contains(q) ||
@@ -88,6 +91,31 @@ class _EntriesScreenState extends State<EntriesScreen> {
                       label: Text(tr(k.$2)),
                       selected: kindFilter == k.$1,
                       onSelected: (_) => setState(() => kindFilter = k.$1),
+                    ),
+                  ),
+                if (app.activeAccounts.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: InputChip(
+                      label: Text(accountFilter == null ? tr('Any account') : app.account(accountFilter)?.name ?? ''),
+                      avatar: Icon(accountFilter == null ? Icons.credit_card : accountIcon(app.account(accountFilter)?.type ?? 'bank'), size: 18),
+                      onDeleted: accountFilter == null ? null : () => setState(() => accountFilter = null),
+                      onPressed: () async {
+                        final id = await showModalBottomSheet<int>(
+                          context: context,
+                          builder: (c) => SafeArea(
+                            child: ListView(shrinkWrap: true, children: [
+                              for (final a in app.activeAccounts)
+                                ListTile(
+                                  leading: Icon(accountIcon(a.type)),
+                                  title: Text(a.name),
+                                  onTap: () => Navigator.pop(c, a.id),
+                                ),
+                            ]),
+                          ),
+                        );
+                        if (id != null) setState(() => accountFilter = id);
+                      },
                     ),
                   ),
                 InputChip(
@@ -159,7 +187,11 @@ class _EntriesScreenState extends State<EntriesScreen> {
         child: Icon(t.source == 'sms' ? Icons.sms_outlined : Icons.edit_note, size: 18, color: Color(c?.color ?? 0xFF888888)),
       ),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text([c?.display ?? '', if (t.note.isNotEmpty && t.merchant.isNotEmpty) t.note].join(' · '),
+      subtitle: Text([
+        c?.display ?? '',
+        if (app.account(t.accountId) != null) app.account(t.accountId)!.name,
+        if (t.note.isNotEmpty && t.merchant.isNotEmpty) t.note,
+      ].join(' · '),
           maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: Text(ltr('${t.kind == 'income' ? '+' : '−'}${fmtAuto(t.amount)}'),
           style: TextStyle(fontFeatures: tabular, fontWeight: FontWeight.w600, fontSize: 15,
