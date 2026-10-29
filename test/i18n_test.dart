@@ -34,7 +34,7 @@ void main() {
     setLanguage('ar');
     expect(tr('Income'), 'الدخل');
     expect(tr('{a} {cur} left', {'a': '100', 'cur': 'ر.س'}), 'المتبقي 100 ر.س');
-    expect(trn(3, '{n} entry', '{n} entries'), 'القيود: 3');
+    expect(trn(3, '{n} entry', '{n} entries'), 'العمليات: 3');
     expect(periodFor(DateTime(2026, 10, 5), 1).label, 'أكتوبر 2026');
     expect(fmt(-1084), '\u202A−1,084\u202C');
     setLanguage('en');
