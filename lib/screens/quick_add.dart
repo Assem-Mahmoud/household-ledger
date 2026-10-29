@@ -32,14 +32,21 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
   final noteFocus = FocusNode();
   String get note => noteCtl.text.trim();
   bool saving = false;
+  bool padOpen = true; // number pad: open for the amount, folds away once you move on
+
+  void _foldPad() => padOpen = false;
 
   String get merchant => merchantCtl.text.trim();
 
   @override
   void initState() {
     super.initState();
-    merchantFocus.addListener(() => setState(() {}));
-    noteFocus.addListener(() => setState(() {}));
+    merchantFocus.addListener(() => setState(() {
+          if (merchantFocus.hasFocus) _foldPad();
+        }));
+    noteFocus.addListener(() => setState(() {
+          if (noteFocus.hasFocus) _foldPad();
+        }));
   }
 
   @override
@@ -81,6 +88,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
       if (id != null && (categoryId == null || autoPicked)) {
         categoryId = id;
         autoPicked = true;
+        _foldPad();
         if (!frequentCategories(kind).take(7).any((x) => x.id == id)) extraCategory = id;
       }
     });
@@ -189,8 +197,11 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
           Expanded(
             child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), children: [
               GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                onTap: () {
+                  FocusScope.of(context).unfocus();
+                  setState(() => padOpen = true);
+                },
+                child: Column(children: [Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
                 Flexible(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
@@ -200,6 +211,13 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(app.currency, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: c.muted)),
+              ]),
+                if (!padOpen || typing)
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.dialpad, size: 14, color: c.primary),
+                    const SizedBox(width: 4),
+                    Text(tr('Tap to edit the amount'), style: TextStyle(fontSize: 12, color: c.primary, fontWeight: FontWeight.w600)),
+                  ]),
               ]),
               ),
               const SizedBox(height: 12),
@@ -259,7 +277,12 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                     firstDate: DateTime(2015),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
-                  if (d != null) setState(() => date = d);
+                  if (d != null) {
+                    setState(() {
+                      date = d;
+                      _foldPad();
+                    });
+                  }
                 }),
               ]),
               const SizedBox(height: 18),
@@ -279,6 +302,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                         selected: categoryId == cat.id,
                         onTap: () => setState(() {
                               categoryId = cat.id;
+                              _foldPad();
                               autoPicked = false;
                             })),
                   _CatButton(
@@ -290,6 +314,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                         setState(() {
                           categoryId = id;
                           extraCategory = id;
+                          _foldPad();
                           autoPicked = false;
                         });
                       }
@@ -307,7 +332,10 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                     avatar: Icon(accountIcon(a.type), size: 16),
                     label: Text(a.name),
                     selected: accountId == a.id,
-                    onSelected: (v) => setState(() => accountId = v ? a.id : null),
+                    onSelected: (v) => setState(() {
+                      accountId = v ? a.id : null;
+                      _foldPad();
+                    }),
                   ),
                 ActionChip(
                   avatar: const Icon(Icons.add, size: 16),
@@ -325,7 +353,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
             color: c.bg,
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
             child: Column(children: [
-              if (!typing)
+              if (padOpen && !typing)
               for (final row in const [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['.', '0', '⌫']])
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),

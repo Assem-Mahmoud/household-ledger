@@ -499,6 +499,7 @@ const arabic = <String, String>{
   "Suggest": "اقتراح",
   "Tap + to add your first entry.": "اضغط + لإضافة أول عملية.",
   "Tap a category to change it for this period only or update the template.": "اضغط على فئة لتعديلها لهذه الفترة فقط أو لتحديث القالب.",
+  "Tap to edit the amount": "اضغط لتعديل المبلغ",
   "Template": "القالب",
   "Template value: {a} {cur}": "قيمة القالب: {a} {cur}",
   "Template value: {a} {cur} · this period currently differs": "قيمة القالب: {a} {cur} · هذه الفترة مختلفة حاليًا",
