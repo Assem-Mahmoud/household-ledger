@@ -25,9 +25,61 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
   int? extraCategory; // picked from "More" when it isn't among the shortcuts
   int? accountId = app.lastAccountId;
   DateTime date = DateTime.now();
-  String merchant = '';
+  final merchantCtl = TextEditingController();
+  final merchantFocus = FocusNode();
+  bool autoPicked = false; // category was filled in from the merchant, not tapped
   String note = '';
   bool saving = false;
+
+  String get merchant => merchantCtl.text.trim();
+
+  @override
+  void initState() {
+    super.initState();
+    merchantFocus.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    merchantCtl.dispose();
+    merchantFocus.dispose();
+    super.dispose();
+  }
+
+  /// Merchants used recently for this kind, newest first.
+  List<String> get recentMerchants {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final t in app.txns) {
+      if (t.kind != kind || t.merchant.trim().isEmpty) continue;
+      if (seen.add(t.merchant.trim().toLowerCase())) out.add(t.merchant.trim());
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
+
+  /// The category this merchant usually goes to: a learned rule, else its last entry.
+  int? _categoryFor(String m) {
+    final k = m.trim().toLowerCase();
+    if (k.isEmpty) return null;
+    final learned = app.learnedCategory(m, kind);
+    if (learned != null) return learned;
+    for (final t in app.txns) {
+      if (t.kind == kind && t.merchant.trim().toLowerCase() == k) return t.categoryId;
+    }
+    return null;
+  }
+
+  void _merchantChanged(String m) {
+    final id = _categoryFor(m);
+    setState(() {
+      if (id != null && (categoryId == null || autoPicked)) {
+        categoryId = id;
+        autoPicked = true;
+        if (!frequentCategories(kind).take(7).any((x) => x.id == id)) extraCategory = id;
+      }
+    });
+  }
 
   double get amount => double.tryParse(digits) ?? 0;
 
@@ -55,34 +107,19 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
   }
 
   Future<void> _details() async {
-    final mCtl = TextEditingController(text: merchant);
     final nCtl = TextEditingController(text: note);
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const T('Details'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: mCtl,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: InputDecoration(labelText: tr('Merchant or payee (optional)')),
-          ),
-          const SizedBox(height: 10),
-          TextField(controller: nCtl, decoration: InputDecoration(labelText: tr('Note (optional)'))),
-        ]),
+        title: const T('Add note'),
+        content: TextField(controller: nCtl, autofocus: true, decoration: InputDecoration(labelText: tr('Note (optional)'))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const T('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(c, true), child: const T('Save')),
         ],
       ),
     );
-    if (ok == true) {
-      setState(() {
-        merchant = mCtl.text.trim();
-        note = nCtl.text.trim();
-      });
-    }
+    if (ok == true) setState(() => note = nCtl.text.trim());
   }
 
   Future<void> _save() async {
@@ -122,6 +159,8 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
       shortcuts = [...shortcuts.take(6), app.cat(extraCategory!)!];
     }
     final today = DateTime.now();
+    final typing = merchantFocus.hasFocus;
+    final recent = recentMerchants;
     final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
 
     Widget pill(IconData icon, String label, VoidCallback onTap) => OutlinedButton.icon(
@@ -160,7 +199,9 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
           ),
           Expanded(
             child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), children: [
-              Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+              GestureDetector(
+                onTap: () => merchantFocus.unfocus(),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
                 Flexible(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
@@ -171,7 +212,54 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                 const SizedBox(width: 8),
                 Text(app.currency, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: c.muted)),
               ]),
-              const SizedBox(height: 8),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: merchantCtl,
+                focusNode: merchantFocus,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.done,
+                onChanged: _merchantChanged,
+                onSubmitted: (_) => merchantFocus.unfocus(),
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.storefront_outlined),
+                  hintText: tr(kind == 'income' ? 'From whom? (optional)' : 'Where? e.g. Lulu, Jahez (optional)'),
+                  suffixIcon: merchant.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: tr('Clear'),
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => setState(() {
+                            merchantCtl.clear();
+                            if (autoPicked) categoryId = null;
+                            autoPicked = false;
+                          }),
+                        ),
+                ),
+              ),
+              if (recent.isNotEmpty && merchant.isEmpty) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 36,
+                  child: ListView(scrollDirection: Axis.horizontal, children: [
+                    for (final m in recent)
+                      Padding(
+                        padding: const EdgeInsetsDirectional.only(end: 6),
+                        child: ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(m),
+                          onPressed: () {
+                            merchantCtl.text = m;
+                            _merchantChanged(m);
+                            merchantFocus.unfocus();
+                          },
+                        ),
+                      ),
+                  ]),
+                ),
+              ],
+              const SizedBox(height: 10),
               Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
                 pill(Icons.calendar_today_outlined, isToday ? tr('Today') : '${shortDate(date)} ${date.year}', () async {
                   final d = await showDatePicker(
@@ -182,7 +270,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                   );
                   if (d != null) setState(() => date = d);
                 }),
-                pill(Icons.edit_outlined, merchant.isNotEmpty ? merchant : note.isNotEmpty ? note : tr('Add note'), _details),
+                pill(Icons.notes, note.isNotEmpty ? note : tr('Add note'), _details),
               ]),
               const SizedBox(height: 18),
               Text(tr('Category'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted)),
@@ -193,9 +281,16 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                 crossAxisCount: 4,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
-                childAspectRatio: 1.05,
+                childAspectRatio: 0.88,
                 children: [
-                  for (final cat in shortcuts) _CatButton(cat: cat, selected: categoryId == cat.id, onTap: () => setState(() => categoryId = cat.id)),
+                  for (final cat in shortcuts)
+                    _CatButton(
+                        cat: cat,
+                        selected: categoryId == cat.id,
+                        onTap: () => setState(() {
+                              categoryId = cat.id;
+                              autoPicked = false;
+                            })),
                   _CatButton(
                     cat: null,
                     selected: false,
@@ -205,6 +300,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                         setState(() {
                           categoryId = id;
                           extraCategory = id;
+                          autoPicked = false;
                         });
                       }
                     },
@@ -239,6 +335,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
             color: c.bg,
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
             child: Column(children: [
+              if (!typing)
               for (final row in const [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['.', '0', '⌫']])
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -304,7 +401,7 @@ class _CatButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(4),
+          padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Container(
               width: 34,
@@ -314,10 +411,10 @@ class _CatButton extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(cat?.display ?? tr('More'),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.text)),
+                style: TextStyle(fontSize: 11.5, height: 1.15, fontWeight: FontWeight.w600, color: c.text)),
           ]),
         ),
       ),

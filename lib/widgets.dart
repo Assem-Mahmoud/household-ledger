@@ -55,12 +55,12 @@ class PeriodSwitcher extends StatelessWidget {
       height: 40,
       decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(20), border: Border.all(color: c.outline)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        arrow(Directionality.of(context) == TextDirection.rtl ? Icons.chevron_right : Icons.chevron_left, tr('Previous period'), app.goPrev),
+        arrow(Icons.chevron_left, tr('Previous period'), app.goPrev), // chevrons mirror themselves in Arabic
         GestureDetector(
           onTap: app.goToday,
           child: Text(per.label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.text)),
         ),
-        arrow(Directionality.of(context) == TextDirection.rtl ? Icons.chevron_left : Icons.chevron_right, tr('Next period'),
+        arrow(Icons.chevron_right, tr('Next period'),
             per.isCurrent ? null : app.goNext),
       ]),
     );
