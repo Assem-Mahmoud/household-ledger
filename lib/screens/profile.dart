@@ -5,7 +5,8 @@ import '../format.dart';
 import '../i18n.dart';
 import '../state.dart';
 import '../widgets.dart';
-import 'settings.dart' show rescanAfterChange;
+import '../theme.dart';
+import 'settings.dart' show BackupScreen, SettingsScreen, rescanAfterChange;
 
 /// Your name, how your money month works, and the accounts and cards you spend from.
 class ProfileScreen extends StatelessWidget {
@@ -16,94 +17,91 @@ class ProfileScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: app,
       builder: (context, _) {
-        final cs = Theme.of(context).colorScheme;
         final name = app.userName;
         final spend = app.byAccount(app.period);
         return Scaffold(
           appBar: AppBar(title: const T('Profile')),
           body: ListView(padding: const EdgeInsets.only(bottom: 40), children: [
-            const SizedBox(height: 8),
-            Center(
-              child: CircleAvatar(
-                radius: 36,
-                backgroundColor: cs.primaryContainer,
-                child: name.isEmpty
-                    ? Icon(Icons.person_outline, size: 36, color: cs.onPrimaryContainer)
-                    : Text(name.characters.first.toUpperCase(),
-                        style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: cs.onPrimaryContainer)),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Center(
-              child: TextButton.icon(
-                onPressed: () => _editName(context),
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: Text(name.isEmpty ? tr('Add your name') : name,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-              ),
+            SectionCard(
+              child: Row(children: [
+                const Avatar(size: 56),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(name.isEmpty ? tr('Add your name') : name,
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: name.isEmpty ? lc.primary : lc.text)),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        app.currencyCode,
+                        app.cycleStartDay == 1
+                            ? tr('Calendar months')
+                            : tr('Day {a} to day {b} of the next month (salary to salary)', {'a': app.cycleStartDay, 'b': app.cycleStartDay - 1}),
+                      ].join(' · '),
+                      style: TextStyle(fontSize: 13, color: lc.muted),
+                    ),
+                  ]),
+                ),
+                IconButton(tooltip: tr('Your name'), icon: const Icon(Icons.edit_outlined), onPressed: () => _editName(context)),
+              ]),
             ),
 
             _header(context, 'Your money month'),
-            ListTile(
-              leading: const Icon(Icons.payments_outlined),
-              title: const T('Currency'),
-              subtitle: const T('Used to read amounts in bank SMS'),
-              trailing: CurrencyPicker(onChanged: (code) async {
-                await app.setSetting('currency', code);
-                if (context.mounted) await rescanAfterChange(context);
-              }),
-            ),
-            ListTile(
-              leading: const Icon(Icons.event_repeat),
-              title: const T('Month starts on day'),
-              subtitle: Text(app.cycleStartDay == 1
-                  ? tr('Calendar months')
-                  : tr('Day {a} to day {b} of the next month (salary to salary)',
-                      {'a': app.cycleStartDay, 'b': app.cycleStartDay - 1})),
-              trailing: DropdownButton<int>(
-                value: app.cycleStartDay,
-                items: [for (var d = 1; d <= 28; d++) DropdownMenuItem(value: d, child: Text('$d'))],
-                onChanged: (v) => app.setSetting('cycleDay', '${v ?? 1}'),
+            _group([
+              ListTile(
+                leading: const Icon(Icons.payments_outlined),
+                title: const T('Currency'),
+                subtitle: const T('Used to read amounts in bank SMS'),
+                trailing: CurrencyPicker(onChanged: (code) async {
+                  await app.setSetting('currency', code);
+                  if (context.mounted) await rescanAfterChange(context);
+                }),
               ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_balance_outlined),
-              title: const T('Expected monthly income'),
-              subtitle: const T('Salary plus allowances, used for planning'),
-              trailing: Text(app.expectedIncome > 0 ? '${fmt(app.expectedIncome)} ${app.currency}' : tr('Not set'),
-                  style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
-              onTap: () => _editIncome(context),
-            ),
+              ListTile(
+                leading: const Icon(Icons.event_repeat),
+                title: const T('Month starts on day'),
+                trailing: DropdownButton<int>(
+                  value: app.cycleStartDay,
+                  items: [for (var d = 1; d <= 28; d++) DropdownMenuItem(value: d, child: Text('$d'))],
+                  onChanged: (v) => app.setSetting('cycleDay', '${v ?? 1}'),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_balance_outlined),
+                title: const T('Expected monthly income'),
+                trailing: Text(app.expectedIncome > 0 ? '${fmt(app.expectedIncome)} ${app.currency}' : tr('Not set'),
+                    style: TextStyle(color: lc.primary, fontWeight: FontWeight.w600)),
+                onTap: () => _editIncome(context),
+              ),
+            ]),
 
-            _header(context, 'Accounts & cards'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+              child: Row(children: [
+                Expanded(child: Text(tr('Accounts & cards'), style: TextStyle(color: lc.text, fontSize: 16, fontWeight: FontWeight.w700))),
+                if (app.accounts.isNotEmpty) Text(tr('spent this month'), style: TextStyle(fontSize: 12.5, color: lc.muted)),
+              ]),
+            ),
             if (app.accounts.isEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: T(
                     'Name the accounts and cards you spend from, like Main account, Credit card or Savings. '
                     'Bank SMS are matched to them by the card or account digits, so you can see what each one spends.',
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13.5, height: 1.4)),
+                    style: TextStyle(color: lc.muted, fontSize: 13.5, height: 1.4)),
               ),
-            for (final a in app.accounts)
-              ListTile(
-                leading: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Color(a.color).withOpacity(0.15),
-                  child: Icon(accountIcon(a.type), size: 18, color: Color(a.color)),
-                ),
-                title: Text(a.name, style: TextStyle(color: a.archived ? cs.onSurfaceVariant : null)),
-                subtitle: Text([
-                  tr(accountTypes.firstWhere((t) => t.$1 == a.type, orElse: () => accountTypes.first).$2),
-                  if (a.digitList.isNotEmpty) tr('ending {d}', {'d': a.digitList.join(', ')}),
-                ].join(' · ')),
-                trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text(fmt(spend[a.id]?.$1 ?? 0), style: const TextStyle(fontWeight: FontWeight.w600, fontFeatures: tabular)),
-                  T('spent this month', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                ]),
-                onTap: () => editAccount(context, a),
+            if (app.accounts.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: LayoutBuilder(builder: (context, box) {
+                  final w = (box.maxWidth - 10) / 2;
+                  return Wrap(spacing: 10, runSpacing: 10, children: [
+                    for (final a in app.accounts) SizedBox(width: w, child: _AccountTile(a, spend[a.id]?.$1 ?? 0)),
+                  ]);
+                }),
               ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
               child: OutlinedButton.icon(
                 onPressed: () => editAccount(context, null),
                 icon: const Icon(Icons.add_card),
@@ -111,6 +109,41 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
             const _UnnamedCards(),
+
+            _header(context, 'App'),
+            _group([
+              ListTile(
+                leading: const Icon(Icons.dark_mode_outlined),
+                title: const T('Appearance'),
+                trailing: DropdownButton<String>(
+                  value: app.appearance.value,
+                  items: [
+                    DropdownMenuItem(value: 'system', child: T('Phone setting')),
+                    DropdownMenuItem(value: 'light', child: T('Light')),
+                    DropdownMenuItem(value: 'dark', child: T('Dark')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) app.setAppearance(v);
+                  },
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.cloud_upload_outlined),
+                title: const T('Backup & restore'),
+                subtitle: Text(app.backupUri.isNotEmpty
+                    ? '${app.backupWhere.isEmpty ? tr('Automatic backup') : app.backupWhere} · ${app.daysSinceBackup == 0 ? tr('Last backup: today') : app.daysSinceBackup == null ? tr('Never backed up') : trn(app.daysSinceBackup!, 'Last backup: {n} day ago', 'Last backup: {n} days ago')}'
+                    : tr('Turn on automatic backup')),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen())),
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const T('All settings'),
+                subtitle: const T('Language, bank messages, categories, reminders'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+              ),
+            ]),
           ]),
         );
       },
@@ -118,8 +151,20 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _header(BuildContext context, String text) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
-        child: Text(tr(text), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+        child: Text(tr(text), style: TextStyle(color: lc.text, fontSize: 16, fontWeight: FontWeight.w700)),
+      );
+
+  Widget _group(List<Widget> tiles) => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(color: lc.card, borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: [
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0) Divider(height: 1, indent: 56, color: lc.divider),
+            tiles[i],
+          ],
+        ]),
       );
 
   Future<void> _editName(BuildContext context) async {
@@ -254,7 +299,7 @@ Future<bool> editAccount(BuildContext context, Account? existing, {String? digit
                 ),
               ),
             if (error != null)
-              Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: badColor))),
+              Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: TextStyle(color: badColor))),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () {
@@ -295,4 +340,54 @@ Future<bool> editAccount(BuildContext context, Account? existing, {String? digit
         content: Text(tr('{n} earlier entries were linked to {a}.', {'n': linked, 'a': a.name}))));
   }
   return true;
+}
+
+
+/// An account shown as a small card: colour by type, name, digits and this month's spending.
+class _AccountTile extends StatelessWidget {
+  final Account a;
+  final double spent;
+  const _AccountTile(this.a, this.spent);
+  @override
+  Widget build(BuildContext context) {
+    final c = lc;
+    final (bg, fg, sub) = switch (a.type) {
+      'credit' => (c.dark ? const Color(0xFF2A3531) : const Color(0xFF1E2A26), Colors.white, const Color(0xFF9FB3AC)),
+      'bank' => (c.hero, c.heroText, c.heroSub),
+      'savings' => (c.attnBg, c.text, c.attnText),
+      _ => (c.card, c.text, c.muted),
+    };
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => editAccount(context, a),
+        child: Container(
+          height: 124,
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Row(children: [
+              Expanded(
+                child: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fg)),
+              ),
+              Icon(accountIcon(a.type), size: 20, color: sub),
+            ]),
+            Text(a.digitList.isEmpty ? tr(accountTypes.firstWhere((t) => t.$1 == a.type, orElse: () => accountTypes.first).$2) : '•••• ${a.digitList.first}',
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: sub, letterSpacing: a.digitList.isEmpty ? 0 : 2)),
+            Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(fmt(spent), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: fg, fontFeatures: tabular)),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(app.currency, style: TextStyle(fontSize: 12, color: sub)),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
 }

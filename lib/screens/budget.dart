@@ -5,12 +5,13 @@ import '../i18n.dart';
 import '../models.dart';
 import '../state.dart';
 import '../stats.dart';
+import '../theme.dart';
 import '../widgets.dart';
 import 'plan.dart';
 
 /// Three views:
-///  - This period: limits that apply now (template value unless changed for this period only)
-///  - Plan: monthly checklist of bills to pay and amounts to save
+///  - Checklist: monthly bills to pay, amounts to save and yearly expenses
+///  - Budgets: limits that apply now (template value unless changed for this period only)
 ///  - Template: the default limits every period inherits
 class BudgetScreen extends StatefulWidget {
   const BudgetScreen({super.key});
@@ -45,10 +46,18 @@ class _BudgetScreenState extends State<BudgetScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const T('Budget & plan'),
-        bottom: TabBar(controller: _tabs, tabs: [Tab(text: tr('This period')), Tab(text: tr('Plan')), Tab(text: tr('Template'))]),
+        title: const T('Plan'),
+        actions: const [PeriodSwitcher(), SizedBox(width: 12)],
+        bottom: TabBar(
+          controller: _tabs,
+          dividerColor: Colors.transparent,
+          indicatorSize: TabBarIndicatorSize.label,
+          labelStyle: const TextStyle(fontFamily: appFont, fontSize: 14, fontWeight: FontWeight.w700),
+          unselectedLabelStyle: const TextStyle(fontFamily: appFont, fontSize: 14, fontWeight: FontWeight.w500),
+          tabs: [Tab(text: tr('Checklist')), Tab(text: tr('Budgets')), Tab(text: tr('Template'))],
+        ),
       ),
-      body: TabBarView(controller: _tabs, children: const [_MonthTab(), PlanTab(), _TemplateTab()]),
+      body: TabBarView(controller: _tabs, children: const [PlanTab(), _MonthTab(), _TemplateTab()]),
     );
   }
 }
@@ -122,7 +131,6 @@ class _MonthTab extends StatelessWidget {
         final total = app.totalBudget(per);
         final saveCats = app.active('expense').where((c) => c.isSaving).toList();
         return ListView(padding: const EdgeInsets.only(bottom: 32), children: [
-          const Padding(padding: EdgeInsets.only(top: 4), child: Center(child: PeriodSwitcher())),
           SectionCard(
             child: Row(children: [
               _fig(context, 'Budgeted', total),

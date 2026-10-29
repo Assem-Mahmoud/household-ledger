@@ -97,7 +97,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await app.setSetting('onboarded', '1');
     await app.applyReminder();
     app.goToday();
-    if (smsAllowed && start != 'today') app.tab.value = 1;
+    if (smsAllowed && start != 'today') app.openActivity(0);
     widget.onDone();
   }
 

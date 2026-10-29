@@ -1,12 +1,13 @@
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Category;
 
 import '../format.dart';
 import '../i18n.dart';
 import '../periods.dart';
 import '../state.dart';
 import '../stats.dart';
+import '../theme.dart';
 import '../widgets.dart';
 import 'profile.dart' show accountIcon;
 
@@ -51,13 +52,94 @@ class AnalyticsScreen extends StatelessWidget {
         final need = s.groups['need'] ?? 0.0, want = s.groups['want'] ?? 0.0;
         final saved = s.income > 0 ? max(0.0, s.income - need - want) : (s.groups['save'] ?? 0.0);
 
+        // ring chart: top five categories, the rest as "Other"
+        final ringParts = <(double, Color)>[
+          for (final e in cats.take(5)) (e.value, categoryColor(app.cat(e.key))),
+          if (cats.length > 5) (cats.skip(5).fold<double>(0, (a, e) => a + e.value), lc.outline),
+        ];
+        final tips = insightsFor(per);
+
         return Scaffold(
-          appBar: AppBar(title: const PeriodSwitcher(), centerTitle: true),
+          appBar: AppBar(
+            title: const T('Insights'),
+            centerTitle: false,
+            actions: const [PeriodSwitcher(), SizedBox(width: 12)],
+          ),
           body: ListView(
             padding: const EdgeInsets.only(top: 4, bottom: 32),
             children: [
               SectionCard(
-                title: 'Six-period trend',
+                child: cats.isEmpty
+                    ? T('No spending in this period.', style: TextStyle(color: cs.onSurfaceVariant))
+                    : Row(children: [
+                        DonutChart(ringParts, top: tr('Spent'), big: fmt(s.spend), bottom: app.currency),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                            for (final e in cats.take(5))
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(children: [
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(color: categoryColor(app.cat(e.key)), borderRadius: BorderRadius.circular(3)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(app.cat(e.key)?.display ?? tr('Other'),
+                                        maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
+                                  ),
+                                  Text('${(e.value / max(s.spend, 1) * 100).round()}%',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFeatures: tabular)),
+                                ]),
+                              ),
+                            if (cats.length > 5)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(children: [
+                                  Container(width: 10, height: 10, decoration: BoxDecoration(color: lc.outline, borderRadius: BorderRadius.circular(3))),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(tr('Other'), style: const TextStyle(fontSize: 13))),
+                                  Text(
+                                      '${(cats.skip(5).fold<double>(0, (a, e) => a + e.value) / max(s.spend, 1) * 100).round()}%',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFeatures: tabular)),
+                                ]),
+                              ),
+                          ]),
+                        ),
+                      ]),
+              ),
+
+              for (final t in tips.take(4))
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: lc.card, borderRadius: BorderRadius.circular(18)),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                          color: levelColor(t.level, context).withOpacity(lc.dark ? 0.2 : 0.12), borderRadius: BorderRadius.circular(11)),
+                      child: Icon(
+                          t.level == 'good'
+                              ? Icons.trending_up
+                              : t.level == 'bad'
+                                  ? Icons.error_outline
+                                  : t.level == 'warn'
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.lightbulb_outline,
+                          size: 19,
+                          color: levelColor(t.level, context)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(t.text, style: TextStyle(fontSize: 14, height: 1.4, color: lc.text))),
+                  ]),
+                ),
+
+              SectionCard(
+                title: 'Last 6 months',
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   TrendChart(trend),
                   const SizedBox(height: 8),
@@ -147,7 +229,7 @@ class AnalyticsScreen extends StatelessWidget {
                           ListTile(
                             dense: true,
                             contentPadding: EdgeInsets.zero,
-                            leading: CategoryDot(app.cat(m.categoryId)?.color ?? 0xFF888888, size: 12),
+                            leading: CategoryTile(app.cat(m.categoryId), size: 34),
                             title: Text(m.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                             subtitle: Text(trn(m.count, '{n} purchase · avg {a}', '{n} purchases · avg {a}', {'a': fmt(m.total / m.count)})),
                             trailing: Text(fmt(m.total), style: const TextStyle(fontFeatures: tabular, fontWeight: FontWeight.w600)),
@@ -184,9 +266,9 @@ class AnalyticsScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          CategoryDot(c?.color ?? 0xFF888888),
-          const SizedBox(width: 8),
-          Expanded(child: Text('${c?.display ?? tr('Other')}  ', maxLines: 1, overflow: TextOverflow.ellipsis)),
+          CategoryTile(c, size: 32),
+          const SizedBox(width: 10),
+          Expanded(child: Text('${c?.display ?? tr('Other')}  ', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
           Text(fmt(v), style: const TextStyle(fontFeatures: tabular, fontWeight: FontWeight.w600)),
           SizedBox(
             width: 64,
@@ -199,8 +281,8 @@ class AnalyticsScreen extends StatelessWidget {
           child: LinearProgressIndicator(
             value: share,
             minHeight: 7,
-            backgroundColor: cs.surfaceContainerHighest,
-            color: Color(c?.color ?? 0xFF888888),
+            backgroundColor: lc.raised,
+            color: categoryColor(c),
           ),
         ),
         const SizedBox(height: 3),

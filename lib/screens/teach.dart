@@ -199,7 +199,7 @@ class _TeachSmsScreenState extends State<TeachSmsScreen> {
           if (amount == null)
             T('Mark the amount to continue.', style: TextStyle(color: cs.onSurfaceVariant))
           else if (error != null)
-            Text(tr(error), style: const TextStyle(color: badColor))
+            Text(tr(error), style: TextStyle(color: badColor))
           else ...[
             const Eyebrow('With your marks'),
             const SizedBox(height: 6),
@@ -250,7 +250,7 @@ class _ResultCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final p = parsed;
     if (p == null) {
-      return const T('Not recognised as a transaction (no amount found, or it matched an ignore keyword).',
+      return T('Not recognised as a transaction (no amount found, or it matched an ignore keyword).',
           style: TextStyle(color: badColor));
     }
     final catId = app.suggestCategory(p.merchant, '', p.kind);

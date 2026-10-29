@@ -988,7 +988,7 @@ class BackupScreen extends StatelessWidget {
               ]),
             ]),
             card(border: badColor.withOpacity(0.5), [
-              const T('Start fresh', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: badColor)),
+              T('Start fresh', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: badColor)),
               const SizedBox(height: 10),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46), foregroundColor: badColor),

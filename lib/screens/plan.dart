@@ -6,6 +6,7 @@ import '../i18n.dart';
 import '../models.dart';
 import '../periods.dart';
 import '../state.dart';
+import '../theme.dart';
 import '../widgets.dart';
 
 /// Monthly checklist: bills to pay and amounts to set aside, ticked off as they happen.
@@ -31,7 +32,6 @@ class PlanTab extends StatelessWidget {
             label: const T('Add to plan'),
           ),
           body: ListView(padding: const EdgeInsets.only(bottom: 96), children: [
-            const Padding(padding: EdgeInsets.only(top: 4), child: Center(child: PeriodSwitcher())),
             SectionCard(
               child: lines.isEmpty
                   ? T(
@@ -39,29 +39,54 @@ class PlanTab extends StatelessWidget {
                       'Tick each one off when it\'s done, or link it to a category to tick it automatically.',
                       style: TextStyle(color: cs.onSurfaceVariant),
                     )
-                  : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      Row(children: [
-                        Expanded(
-                          child: Text(tr('{a} of {b} done', {'a': lines.where((l) => l.done).length, 'b': lines.length}),
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                        ),
-                        Text('${fmt(doneAmount)} / ${fmt(total)}',
-                            style: TextStyle(color: cs.onSurfaceVariant, fontFeatures: tabular)),
-                      ]),
-                      const SizedBox(height: 8),
-                      BudgetBar(spent: doneAmount, budget: total, color: goodColor),
-                      if (income > 0) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          tr('Income {i} − plan {p} = {r} {cur} left for day-to-day spending',
-                              {'i': fmt(income), 'p': fmt(total), 'r': fmt(income - total), 'cur': app.currency}),
-                          style: TextStyle(
-                              color: income - total < 0 ? badColor : cs.onSurfaceVariant, fontSize: 13),
-                        ),
-                      ],
+                  : Row(children: [
+                      SizedBox(
+                        width: 84,
+                        height: 84,
+                        child: Stack(alignment: Alignment.center, children: [
+                          SizedBox(
+                            width: 84,
+                            height: 84,
+                            child: CircularProgressIndicator(
+                              value: lines.isEmpty ? 0 : lines.where((l) => l.done).length / lines.length,
+                              strokeWidth: 10,
+                              strokeCap: StrokeCap.round,
+                              backgroundColor: lc.raised,
+                              color: lc.primary,
+                            ),
+                          ),
+                          Text('${lines.where((l) => l.done).length}/${lines.length}',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: lc.text)),
+                        ]),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(
+                            total - doneAmount > 0
+                                ? tr('{a} {cur} still to go', {'a': fmt(total - doneAmount), 'cur': app.currency})
+                                : tr('Everything in this month\'s plan is done.'),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: lc.text),
+                          ),
+                          if (income > 0) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              tr('Income {i} − plan {p} = {r} {cur} left for day-to-day spending',
+                                  {'i': fmt(income), 'p': fmt(total), 'r': fmt(income - total), 'cur': app.currency}),
+                              style: TextStyle(color: income - total < 0 ? badColor : lc.muted, fontSize: 13, height: 1.4),
+                            ),
+                          ],
+                        ]),
+                      ),
                     ]),
             ),
-            for (final l in lines) PlanTile(l, per: per),
+            if (lines.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(color: lc.card, borderRadius: BorderRadius.circular(20)),
+                child: Column(children: [for (final l in lines) PlanTile(l, per: per)]),
+              ),
             const YearlySection(),
           ]),
         );
@@ -100,6 +125,7 @@ class PlanTile extends StatelessWidget {
     final linked = it.categoryId != null ? app.cat(it.categoryId!) : null;
     final tile = Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Checkbox(
+        shape: const CircleBorder(),
         value: line.done,
         onChanged: f != null
             ? (v) => line.fundPay
@@ -171,49 +197,73 @@ class YearlySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final c = lc;
     final list = app.activeFunds;
-    return SectionCard(
-      title: 'Yearly & irregular expenses',
-      trailing: TextButton.icon(
-        onPressed: () => editFund(context, null),
-        icon: const Icon(Icons.add, size: 18),
-        label: const T('Add'),
-      ),
-      child: list.isEmpty
-          ? T('Car insurance, school fees, Iqama or registration renewal… Add them with their due date and the app '
-              'works out how much to set aside each month. It appears in your monthly plan automatically.',
-              style: TextStyle(color: cs.onSurfaceVariant, height: 1.4))
-          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              for (final f in list)
-                InkWell(
-                  onTap: () => editFund(context, f),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      Row(children: [
-                        Expanded(child: Text(f.title, style: const TextStyle(fontWeight: FontWeight.w600))),
-                        Text(fmt(f.amount), style: const TextStyle(fontWeight: FontWeight.w600, fontFeatures: tabular)),
-                      ]),
-                      const SizedBox(height: 4),
-                      BudgetBar(spent: f.saved, budget: f.amount, color: goodColor),
-                      const SizedBox(height: 4),
-                      Text(
-                        [
-                          tr('Due {d}', {'d': '${shortDate(f.due)} ${f.due.year}'}),
-                          tr('{a} saved', {'a': fmt(f.saved)}),
-                          if (app.fundMonthly(f) > 0)
-                            tr('{a} {cur} a month', {'a': fmt(app.fundMonthly(f)), 'cur': app.currency})
-                          else if (f.saved >= f.amount)
-                            tr('Fully saved'),
-                          if (f.repeatMonths > 0) tr(_repeatLabel(f.repeatMonths)),
-                        ].join(' · '),
-                        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: Text(tr('Yearly & irregular expenses'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.text))),
+          TextButton.icon(
+            style: TextButton.styleFrom(backgroundColor: c.primarySoft, foregroundColor: c.onPrimarySoft),
+            onPressed: () => editFund(context, null),
+            icon: const Icon(Icons.add, size: 18),
+            label: const T('Add'),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        if (list.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(18)),
+            child: T('Car insurance, school fees, Iqama or registration renewal… Add them with their due date and the app '
+                'works out how much to set aside each month. It appears in your monthly plan automatically.',
+                style: TextStyle(color: c.muted, height: 1.4)),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, box) {
+              final w = (box.maxWidth - 10) / 2;
+              return Wrap(spacing: 10, runSpacing: 10, children: [
+                for (final f in list)
+                  SizedBox(
+                    width: w,
+                    child: Material(
+                      color: c.card,
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () => editFund(context, f),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            CategoryTile(f.categoryId == null ? null : app.cat(f.categoryId!), size: 36),
+                            const SizedBox(height: 8),
+                            Text(f.title,
+                                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text)),
+                            Text(tr('Due {d}', {'d': '${shortDate(f.due)} ${f.due.year}'}), style: TextStyle(fontSize: 12, color: c.muted)),
+                            const SizedBox(height: 8),
+                            BudgetBar(spent: f.saved, budget: f.amount, color: c.primary),
+                            const SizedBox(height: 6),
+                            Text(tr('{a} of {b} saved', {'a': fmt(f.saved), 'b': fmt(f.amount)}), style: TextStyle(fontSize: 12, color: c.muted)),
+                            const SizedBox(height: 2),
+                            Text(
+                              app.fundMonthly(f) > 0
+                                  ? tr('{a} {cur} a month', {'a': fmt(app.fundMonthly(f)), 'cur': app.currency})
+                                  : f.saved >= f.amount
+                                      ? tr('Fully saved')
+                                      : tr(_repeatLabel(f.repeatMonths)),
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.primary),
+                            ),
+                          ]),
+                        ),
                       ),
-                    ]),
+                    ),
                   ),
-                ),
-            ]),
+              ]);
+            },
+          ),
+      ]),
     );
   }
 }
@@ -346,7 +396,7 @@ Future<void> editFund(BuildContext context, Fund? existing,
               ),
             ],
             if (error != null)
-              Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: badColor))),
+              Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: TextStyle(color: badColor))),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () {
@@ -477,7 +527,7 @@ Future<void> editPlanItem(BuildContext context, PlanLine? line) async {
               ),
             if (error != null) Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(error!, style: const TextStyle(color: badColor)),
+              child: Text(error!, style: TextStyle(color: badColor)),
             ),
             const SizedBox(height: 16),
             if (existing == null)
@@ -574,10 +624,7 @@ class PlanCard extends StatelessWidget {
     return SectionCard(
       title: 'Monthly plan',
       trailing: TextButton(
-          onPressed: () {
-            app.budgetTab.value = 1;
-            app.tab.value = 4;
-          },
+          onPressed: () => app.openPlan(0),
           child: Text(tr(lines.isEmpty ? 'Set up' : 'All'))),
       child: lines.isEmpty
           ? T('Add what must happen each month (rent, fees, savings) and tick it off as you go.',

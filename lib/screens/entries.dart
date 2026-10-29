@@ -7,7 +7,8 @@ import '../periods.dart';
 import '../state.dart';
 import '../stats.dart';
 import '../widgets.dart';
-import 'entry_form.dart';
+import '../theme.dart';
+import 'home.dart' show EntryRow;
 import 'profile.dart' show accountIcon;
 
 class EntriesScreen extends StatefulWidget {
@@ -42,33 +43,45 @@ class _EntriesScreenState extends State<EntriesScreen> {
         }).toList();
         final total = list.fold<double>(0, (a, t) => a + (t.kind == 'income' ? t.amount : -t.amount));
 
+        final c = lc;
+        final now = DateTime.now();
+        String dayLabel(String iso) {
+          final d = parseIso(iso);
+          final today = DateTime(now.year, now.month, now.day);
+          final diff = today.difference(d).inDays;
+          if (diff == 0) return tr('Today');
+          if (diff == 1) return tr('Yesterday');
+          return '${weekdayShort(d)}, ${shortDate(d)}';
+        }
         final rows = <Widget>[];
-        String? lastDate;
-        for (final t in list) {
-          if (t.date != lastDate) {
-            lastDate = t.date;
-            final d = parseIso(t.date);
-            final dayTotal = list.where((x) => x.date == t.date && x.kind == 'expense').fold<double>(0, (a, x) => a + x.amount);
-            rows.add(Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-              child: Row(children: [
-                Expanded(child: Eyebrow('${weekdayShort(d)} ${shortDate(d)}')),
-                if (dayTotal > 0)
-                  Text(ltr('−${fmtAuto(dayTotal)}'), style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12, fontFeatures: tabular)),
-              ]),
-            ));
+        var i = 0;
+        while (i < list.length) {
+          final day = list[i].date;
+          final group = <Txn>[];
+          while (i < list.length && list[i].date == day) {
+            group.add(list[i]);
+            i++;
           }
-          rows.add(_tile(context, t));
+          final net = group.fold<double>(0, (a, x) => a + (x.kind == 'income' ? x.amount : -x.amount));
+          rows.add(Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+            child: Row(children: [
+              Expanded(child: Text(dayLabel(day), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.muted))),
+              Text(ltr('${net >= 0 ? '+' : '−'}${fmtAuto(net.abs())}'),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.muted, fontFeatures: tabular)),
+            ]),
+          ));
+          rows.add(Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(18)),
+            child: Column(children: [for (final t in group) EntryRow(t, showDate: false)]),
+          ));
         }
 
-        return Scaffold(
-          appBar: AppBar(title: const PeriodSwitcher(), centerTitle: true),
-          floatingActionButton: FloatingActionButton(
-            tooltip: tr('Add entry'),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EntryForm())),
-            child: const Icon(Icons.add),
-          ),
-          body: Column(children: [
+        return Container(
+          color: c.bg,
+          child: Column(children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
               child: TextField(
@@ -76,7 +89,6 @@ class _EntriesScreenState extends State<EntriesScreen> {
                   isDense: true,
                   hintText: tr('Search merchant, note, category or amount'),
                   prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onChanged: (v) => setState(() => query = v),
               ),
@@ -209,35 +221,11 @@ class _EntriesScreenState extends State<EntriesScreen> {
                         ),
                       ),
                     )
-                  : ListView(padding: const EdgeInsets.only(bottom: 88), children: rows),
+                  : ListView(padding: const EdgeInsets.only(bottom: 24), children: rows),
             ),
           ]),
         );
       },
-    );
-  }
-
-  Widget _tile(BuildContext context, Txn t) {
-    final cs = Theme.of(context).colorScheme;
-    final c = app.cat(t.categoryId);
-    final title = t.label.isEmpty ? (c?.display ?? '') : t.label;
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 18,
-        backgroundColor: Color(c?.color ?? 0xFF888888).withOpacity(0.15),
-        child: Icon(t.source == 'sms' ? Icons.sms_outlined : Icons.edit_note, size: 18, color: Color(c?.color ?? 0xFF888888)),
-      ),
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text([
-        c?.display ?? '',
-        if (app.account(t.accountId) != null) app.account(t.accountId)!.name,
-        if (t.note.isNotEmpty && t.merchant.isNotEmpty) t.note,
-      ].join(' · '),
-          maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Text(ltr('${t.kind == 'income' ? '+' : '−'}${fmtAuto(t.amount)}'),
-          style: TextStyle(fontFeatures: tabular, fontWeight: FontWeight.w600, fontSize: 15,
-              color: t.kind == 'income' ? cs.primary : null)),
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => EntryForm(existing: t))),
     );
   }
 }

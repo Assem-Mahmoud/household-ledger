@@ -1,17 +1,19 @@
 import 'dart:math';
 import 'dart:ui' show FontFeature;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Category;
 
 import 'format.dart';
 import 'i18n.dart';
 import 'models.dart';
 import 'state.dart';
+import 'theme.dart';
 
-const goodColor = Color(0xFF1D7A4A);
-const warnColor = Color(0xFFB07A12);
-const badColor = Color(0xFFB3322F);
-const spendColor = Color(0xFFB4612B);
+// status colours follow light/dark mode
+Color get goodColor => lc.good;
+Color get warnColor => lc.warn;
+Color get badColor => lc.bad;
+Color get spendColor => lc.secondary;
 
 Color levelColor(String level, BuildContext ctx) {
   switch (level) {
@@ -36,24 +38,31 @@ class PeriodSwitcher extends StatelessWidget {
 
   Widget _build(BuildContext context) {
     final per = app.period;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          tooltip: tr('Previous period'),
-          icon: const Icon(Icons.chevron_left),
-          onPressed: app.goPrev,
-        ),
+    final c = lc;
+    Widget arrow(IconData icon, String tip, VoidCallback? onTap) => InkResponse(
+          onTap: onTap,
+          radius: 20,
+          child: Tooltip(
+            message: tip,
+            child: SizedBox(
+              width: 34,
+              height: 40,
+              child: Icon(icon, size: 20, color: onTap == null ? c.outline : c.text),
+            ),
+          ),
+        );
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(20), border: Border.all(color: c.outline)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        arrow(Directionality.of(context) == TextDirection.rtl ? Icons.chevron_right : Icons.chevron_left, tr('Previous period'), app.goPrev),
         GestureDetector(
           onTap: app.goToday,
-          child: Text(per.label, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          child: Text(per.label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.text)),
         ),
-        IconButton(
-          tooltip: tr('Next period'),
-          icon: const Icon(Icons.chevron_right),
-          onPressed: per.isCurrent ? null : app.goNext,
-        ),
-      ],
+        arrow(Directionality.of(context) == TextDirection.rtl ? Icons.chevron_left : Icons.chevron_right, tr('Next period'),
+            per.isCurrent ? null : app.goNext),
+      ]),
     );
   }
 }
@@ -69,14 +78,9 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
-      ),
+      decoration: BoxDecoration(color: lc.card, borderRadius: BorderRadius.circular(20)),
       padding: padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -85,7 +89,7 @@ class SectionCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(children: [
-                Expanded(child: Text(tr(title!), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
+                Expanded(child: Text(tr(title!), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: lc.text))),
                 if (trailing != null) trailing!,
               ]),
             ),
@@ -142,9 +146,8 @@ class BudgetBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final ratio = budget > 0 ? spent / budget : 0.0;
-    Color c = color ?? spendColor;
+    Color c = color ?? lc.primary;
     if (budget > 0) {
       if (ratio > 1) {
         c = badColor;
@@ -153,11 +156,11 @@ class BudgetBar extends StatelessWidget {
       }
     }
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(4),
       child: SizedBox(
-        height: 8,
+        height: 7,
         child: Stack(children: [
-          Container(color: cs.surfaceContainerHighest),
+          Container(color: lc.raised),
           FractionallySizedBox(widthFactor: ratio.clamp(0.0, 1.0).toDouble(), child: Container(color: c)),
         ]),
       ),
@@ -392,4 +395,144 @@ class CurrencyPicker extends StatelessWidget {
       },
     );
   }
+}
+
+
+/// Rounded square with a category's icon on its tinted colour.
+class CategoryTile extends StatelessWidget {
+  final Category? category;
+  final double size;
+  const CategoryTile(this.category, {super.key, this.size = 40});
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: categoryTint(category), borderRadius: BorderRadius.circular(size * 0.3)),
+        child: Icon(categoryIcon(category), size: size * 0.5, color: categoryColor(category)),
+      );
+}
+
+/// Round avatar with the user's initial.
+class Avatar extends StatelessWidget {
+  final double size;
+  const Avatar({super.key, this.size = 44});
+  @override
+  Widget build(BuildContext context) {
+    final name = app.userName;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: lc.primarySoft, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: name.isEmpty
+          ? Icon(Icons.person_outline, size: size * 0.5, color: lc.onPrimarySoft)
+          : Text(name.characters.first.toUpperCase(),
+              style: TextStyle(fontSize: size * 0.42, fontWeight: FontWeight.w700, color: lc.onPrimarySoft)),
+    );
+  }
+}
+
+/// Two-way switch shaped like the design's segmented tabs.
+class SegmentTabs extends StatelessWidget {
+  final List<Widget> labels;
+  final int selected;
+  final ValueChanged<int> onSelect;
+  const SegmentTabs({super.key, required this.labels, required this.selected, required this.onSelect});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: lc.dark ? lc.card : const Color(0xFFE6ECE8), borderRadius: BorderRadius.circular(14)),
+        child: Row(children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: Material(
+                color: i == selected ? (lc.dark ? lc.raised : Colors.white) : Colors.transparent,
+                borderRadius: BorderRadius.circular(11),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(11),
+                  onTap: () => onSelect(i),
+                  child: SizedBox(
+                    height: 40,
+                    child: Center(
+                      child: DefaultTextStyle(
+                        style: TextStyle(
+                            fontFamily: appFont,
+                            fontSize: 14,
+                            fontWeight: i == selected ? FontWeight.w700 : FontWeight.w600,
+                            color: i == selected ? lc.text : lc.muted),
+                        child: labels[i],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ]),
+      );
+}
+
+/// Small count bubble in the secondary colour.
+class CountBadge extends StatelessWidget {
+  final int count;
+  const CountBadge(this.count, {super.key});
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minWidth: 20),
+        height: 20,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(color: lc.secondary, borderRadius: BorderRadius.circular(10)),
+        alignment: Alignment.center,
+        child: Text('$count', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: lc.onSecondary)),
+      );
+}
+
+
+/// Ring chart: one arc per (value, colour), with a label in the middle.
+class DonutChart extends StatelessWidget {
+  final List<(double, Color)> parts;
+  final String top, big, bottom;
+  final double size;
+  const DonutChart(this.parts, {super.key, required this.top, required this.big, required this.bottom, this.size = 150});
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: size,
+        height: size,
+        child: Stack(alignment: Alignment.center, children: [
+          CustomPaint(size: Size.square(size), painter: _DonutPainter(parts, lc.raised)),
+          Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(top, style: TextStyle(fontSize: 12, color: lc.muted)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(big, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: lc.text, fontFeatures: tabular)),
+            ),
+            Text(bottom, style: TextStyle(fontSize: 12, color: lc.muted)),
+          ]),
+        ]),
+      );
+}
+
+class _DonutPainter extends CustomPainter {
+  final List<(double, Color)> parts;
+  final Color track;
+  _DonutPainter(this.parts, this.track);
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 18.0;
+    final rect = Rect.fromLTWH(stroke / 2, stroke / 2, size.width - stroke, size.height - stroke);
+    final total = parts.fold<double>(0, (a, p) => a + p.$1);
+    canvas.drawArc(rect, 0, 2 * pi, false, Paint()..color = track..style = PaintingStyle.stroke..strokeWidth = stroke);
+    if (total <= 0) return;
+    var start = -pi / 2;
+    const gap = 0.025;
+    for (final p in parts) {
+      if (p.$1 <= 0) continue;
+      final sweep = p.$1 / total * 2 * pi;
+      canvas.drawArc(rect, start + gap / 2, max(0.0, sweep - gap), false,
+          Paint()..color = p.$2..style = PaintingStyle.stroke..strokeWidth = stroke);
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutPainter old) => true;
 }

@@ -5,6 +5,7 @@ import '../i18n.dart';
 import '../models.dart';
 import '../periods.dart';
 import '../state.dart';
+import '../theme.dart';
 import '../widgets.dart';
 import 'plan.dart' show editFund;
 import 'profile.dart' show accountIcon, editAccount;
@@ -178,7 +179,8 @@ class _EntryFormState extends State<EntryForm> {
             children: [
               for (final c in cats)
                 ChoiceChip(
-                  avatar: CategoryDot(c.color),
+                  showCheckmark: false,
+                  avatar: Icon(categoryIcon(c), size: 18, color: categoryColor(c)),
                   label: Text(c.display),
                   selected: categoryId == c.id,
                   onSelected: (_) => setState(() => categoryId = c.id),
@@ -259,7 +261,7 @@ class _EntryFormState extends State<EntryForm> {
           ],
           if (error != null) ...[
             const SizedBox(height: 12),
-            Text(error!, style: const TextStyle(color: badColor)),
+            Text(error!, style: TextStyle(color: badColor)),
           ],
           const SizedBox(height: 20),
           Row(children: [

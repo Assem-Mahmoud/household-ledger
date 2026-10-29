@@ -3,13 +3,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'i18n.dart';
 
+import 'screens/activity.dart';
 import 'screens/analytics.dart';
 import 'screens/budget.dart';
-import 'screens/entries.dart';
 import 'screens/home.dart';
 import 'screens/onboarding.dart';
-import 'screens/review.dart';
+import 'screens/quick_add.dart';
 import 'state.dart';
+import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,23 +21,22 @@ Future<void> main() async {
 class LedgerApp extends StatelessWidget {
   const LedgerApp({super.key});
 
-  ThemeData _theme(Brightness b) => ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0D6B5B), brightness: b),
-        appBarTheme: const AppBarTheme(scrolledUnderElevation: 0),
-      );
-
   @override
   Widget build(BuildContext context) {
     // Changing the language rebuilds the whole app so every screen picks up the new texts.
     return ListenableBuilder(
-      listenable: Listenable.merge([app.language, app.resets]),
-      builder: (context, _) => MaterialApp(
-        key: ValueKey('$lang-${app.resets.value}'),
+      listenable: Listenable.merge([app.language, app.resets, app.appearance]),
+      builder: (context, _) {
+        // light/dark: the user's choice, or follow the phone
+        final mode = app.appearance.value;
+        final dark = mode == 'dark' || (mode != 'light' && MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+        setDarkMode(dark);
+        return MaterialApp(
+        key: ValueKey('$lang-${app.resets.value}-$dark'),
         title: 'Household Ledger',
         debugShowCheckedModeBanner: false,
-        theme: _theme(Brightness.light),
-        darkTheme: _theme(Brightness.dark),
+        theme: buildTheme(dark ? darkColors : lightColors),
+        themeMode: ThemeMode.light,
         locale: Locale(lang),
         supportedLocales: const [Locale('en'), Locale('ar')],
         localizationsDelegates: const [
@@ -45,7 +45,8 @@ class LedgerApp extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
         ],
         home: const Shell(),
-      ),
+      );
+      },
     );
   }
 }
@@ -57,7 +58,7 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> with WidgetsBindingObserver {
-  static const _pages = [HomeScreen(), ReviewScreen(), EntriesScreen(), AnalyticsScreen(), BudgetScreen()];
+  static const _pages = [HomeScreen(), ActivityScreen(), AnalyticsScreen(), BudgetScreen()];
 
   @override
   void initState() {
@@ -110,25 +111,75 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         listenable: app,
         builder: (context, _) => Scaffold(
           body: IndexedStack(index: index, children: _pages),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: index,
-            onDestinationSelected: (i) => app.tab.value = i,
-            destinations: [
-              NavigationDestination(icon: const Icon(Icons.space_dashboard_outlined), selectedIcon: const Icon(Icons.space_dashboard), label: tr('Home')),
-              NavigationDestination(
-                icon: Badge(
-                  isLabelVisible: app.pending.isNotEmpty,
-                  label: Text('${app.pending.length}'),
-                  child: const Icon(Icons.inbox_outlined),
+          bottomNavigationBar: _BottomBar(index: index),
+        ),
+      ),
+    );
+  }
+}
+
+/// Home · Activity · (+) · Insights · Plan, with the add button raised in the middle.
+class _BottomBar extends StatelessWidget {
+  final int index;
+  const _BottomBar({required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = lc;
+    Widget item(int i, IconData icon, IconData activeIcon, String label, {int badge = 0}) {
+      final on = index == i;
+      return Expanded(
+        child: InkWell(
+          onTap: () => app.tab.value = i,
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Badge(
+              isLabelVisible: badge > 0,
+              backgroundColor: c.secondary,
+              textColor: c.onSecondary,
+              label: Text('$badge'),
+              child: Icon(on ? activeIcon : icon, color: on ? c.primary : c.muted),
+            ),
+            const SizedBox(height: 3),
+            Text(label,
+                style: TextStyle(fontSize: 11.5, fontWeight: on ? FontWeight.w700 : FontWeight.w500, color: on ? c.primary : c.muted)),
+          ]),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(color: c.card, border: Border(top: BorderSide(color: c.divider))),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 68,
+          child: Row(children: [
+            item(0, Icons.home_outlined, Icons.home_rounded, tr('Home')),
+            item(1, Icons.receipt_long_outlined, Icons.receipt_long, tr('Activity'), badge: app.pending.length),
+            Expanded(
+              child: Center(
+                child: Semantics(
+                  button: true,
+                  label: tr('Add entry'),
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => const QuickAddScreen())),
+                    child: Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: c.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: c.primary.withOpacity(0.35), blurRadius: 14, offset: const Offset(0, 5))],
+                      ),
+                      child: Icon(Icons.add, size: 28, color: c.onPrimary),
+                    ),
+                  ),
                 ),
-                selectedIcon: const Icon(Icons.inbox),
-                label: tr('Review'),
               ),
-              NavigationDestination(icon: const Icon(Icons.receipt_long_outlined), selectedIcon: const Icon(Icons.receipt_long), label: tr('Entries')),
-              NavigationDestination(icon: const Icon(Icons.insights_outlined), selectedIcon: const Icon(Icons.insights), label: tr('Analytics')),
-              NavigationDestination(icon: const Icon(Icons.account_balance_wallet_outlined), selectedIcon: const Icon(Icons.account_balance_wallet), label: tr('Plan')),
-            ],
-          ),
+            ),
+            item(2, Icons.insights_outlined, Icons.insights, tr('Insights')),
+            item(3, Icons.event_available_outlined, Icons.event_available, tr('Plan')),
+          ]),
         ),
       ),
     );

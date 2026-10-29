@@ -36,7 +36,30 @@ class AppState extends ChangeNotifier {
   /// Language preference: 'system', 'en' or 'ar'. Listened to by the app root.
   final language = ValueNotifier<String>('system');
 
-  /// Sub-tab of the Budget screen: 0 this period, 1 plan, 2 template.
+  /// Light/dark: 'system', 'light' or 'dark'.
+  final appearance = ValueNotifier<String>('system');
+
+  /// Activity tab: 0 = to review, 1 = all entries.
+  final activitySub = ValueNotifier<int>(0);
+
+  Future<void> setAppearance(String v) async {
+    await setSetting('appearance', v, notify: false);
+    appearance.value = v;
+  }
+
+  /// Opens the Activity tab on "To review" (0) or "All entries" (1).
+  void openActivity(int sub) {
+    activitySub.value = sub;
+    tab.value = 1;
+  }
+
+  /// Opens the Plan tab on one of its sections (0 checklist, 1 budgets, 2 template).
+  void openPlan(int section) {
+    budgetTab.value = section;
+    tab.value = 3;
+  }
+
+  /// Sub-tab of the Plan screen: 0 checklist, 1 budgets, 2 template.
   final budgetTab = ValueNotifier<int>(0);
 
   // ---------------------------------------------------------------- setup
@@ -49,6 +72,7 @@ class AppState extends ChangeNotifier {
     });
     await _loadSettings();
     language.value = settings['lang']?.isNotEmpty == true ? settings['lang']! : 'system';
+    appearance.value = settings['appearance']?.isNotEmpty == true ? settings['appearance']! : 'system';
     setLanguage(language.value);
     await _loadCategories();
     await _loadTxns();
