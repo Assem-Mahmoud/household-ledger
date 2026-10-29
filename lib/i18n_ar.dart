@@ -393,7 +393,7 @@ const arabic = <String, String>{
   "Set": "تحديد",
   "Set aside": "تم التجنيب",
   "Set aside for {d} · {a} of {b} saved": "تجنيب لموعد {d} · {a} من {b} مدّخر",
-  "Set aside {a} {cur} a month for {n} month, starting {m}.": "جنّب {a} {cur} شهريًا لمدة شهر واحد، بدءًا من {m}.",
+  "Set aside {a} {cur} a month for {n} month, starting {m}.": "جنّب {a} {cur} شهريًا لمدة {n} شهر، بدءًا من {m}.",
   "Set aside {a} {cur} a month for {n} months, starting {m}.": "جنّب {a} {cur} شهريًا لمدة {n} أشهر، بدءًا من {m}.",
   "Set aside: {t}": "ادّخر: {t}",
   "Set up": "إعداد",
