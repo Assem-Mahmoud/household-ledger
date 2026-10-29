@@ -574,7 +574,7 @@ class AppState extends ChangeNotifier {
     try {
       final perm = await Native.requestPermissions(sms: true);
       if (perm['sms'] != true) {
-        return tr('SMS access is off. Allow it when asked, or in Android Settings → Apps → Household Ledger → Permissions.');
+        return tr('SMS access is off. Allow it when asked, or in Android Settings → Apps → Shahri → Permissions.');
       }
       final ranged = from != null || to != null;
       var since = from != null
@@ -1452,7 +1452,7 @@ class AppState extends ChangeNotifier {
 
   /// Asks where to keep the backup, then writes the first copy. Returns false if cancelled or it failed.
   Future<bool> chooseBackupLocation() async {
-    final uri = await Native.createBackupFile('household-ledger-backup.json');
+    final uri = await Native.createBackupFile('shahri-backup.json');
     if (uri == null || uri.isEmpty) return false;
     final label = await Native.uriLabel(uri);
     final where = [label['where'] ?? '', label['name'] ?? ''].where((x) => x.isNotEmpty).join(' · ');
@@ -1484,8 +1484,8 @@ class AppState extends ChangeNotifier {
     final now = DateTime.now();
     await Native.shareFile(
       content: await backupJson(),
-      fileName: 'household-ledger-backup-${isoDate(now)}.json',
-      subject: tr('Household Ledger backup {d}', {'d': isoDate(now)}),
+      fileName: 'shahri-backup-${isoDate(now)}.json',
+      subject: tr('Shahri backup {d}', {'d': isoDate(now)}),
       body: tr('Backup of {n} entries, created {d}. To restore: open the app, Settings → Backup & restore → Choose backup file.',
           {'n': txns.length, 'd': '${isoDate(now)} ${two(now.hour)}:${two(now.minute)}'}),
     );
@@ -1559,7 +1559,7 @@ class AppState extends ChangeNotifier {
   /// Replaces everything in the app with the backup's contents.
   Future<String> restoreBackup(String text) async {
     final d = jsonDecode(text) as Map<String, dynamic>;
-    if (d['app'] != 'household_ledger') return tr('This file is not a Household Ledger backup.');
+    if (d['app'] != 'household_ledger') return tr('This file is not a Shahri backup.');
     final keepBackupInfo = {'backupEmail': settings['backupEmail'], 'lastBackup': settings['lastBackup']};
     final thisPhone = {
       for (final k in ['backupUri', 'backupWhere', 'autoBackup', 'backupFailed']) k: settings[k],

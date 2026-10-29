@@ -64,7 +64,7 @@ class HomeScreen extends StatelessWidget {
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(_greeting(), style: TextStyle(fontSize: 13, color: c.muted)),
-                          Text(app.userName.isEmpty ? tr('Household Ledger') : app.userName,
+                          Text(app.userName.isEmpty ? tr('Shahri') : app.userName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text)),

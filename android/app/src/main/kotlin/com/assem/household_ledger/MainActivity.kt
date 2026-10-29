@@ -130,7 +130,7 @@ class MainActivity : FlutterActivity() {
                         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                             addCategory(Intent.CATEGORY_OPENABLE)
                             type = "application/json"
-                            putExtra(Intent.EXTRA_TITLE, call.argument<String>("name") ?: "household-ledger-backup.json")
+                            putExtra(Intent.EXTRA_TITLE, call.argument<String>("name") ?: "shahri-backup.json")
                         }
                         try {
                             startActivityForResult(intent, CREATE_REQUEST)

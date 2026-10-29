@@ -97,12 +97,12 @@ jobs:
       - name: Upload APK (Actions artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: household-ledger-apk
+          name: shahri-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Publish as a GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Household Ledger build ${{ github.run_number }}
+          name: Shahri build ${{ github.run_number }}
           files: build/app/outputs/flutter-apk/app-release.apk

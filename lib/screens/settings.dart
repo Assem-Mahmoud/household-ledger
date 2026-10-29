@@ -315,7 +315,7 @@ class SettingsScreen extends StatelessWidget {
     final summary = app.describeBackup(text);
     if (summary == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: T('That file is not a Household Ledger backup (.json from "Email a backup").')));
+          const SnackBar(content: T('That file is not a Shahri backup (.json from "Email a backup").')));
       return;
     }
     final ok = await showDialog<bool>(
@@ -752,8 +752,8 @@ class BackupScreen extends StatelessWidget {
     try {
       await Native.shareFile(
         content: app.exportCsv(),
-        fileName: 'household-ledger-${isoDate(DateTime.now())}.csv',
-        subject: tr('Household Ledger entries {d}', {'d': isoDate(DateTime.now())}),
+        fileName: 'shahri-entries-${isoDate(DateTime.now())}.csv',
+        subject: tr('Shahri entries {d}', {'d': isoDate(DateTime.now())}),
         body: tr('All entries as CSV.'),
       );
     } catch (e) {

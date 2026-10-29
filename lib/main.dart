@@ -33,7 +33,7 @@ class LedgerApp extends StatelessWidget {
         setDarkMode(dark);
         return MaterialApp(
         key: ValueKey('$lang-${app.resets.value}-$dark'),
-        title: 'Household Ledger',
+        title: 'Shahri',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(dark ? darkColors : lightColors),
         themeMode: ThemeMode.light,

@@ -1,4 +1,4 @@
-# Household Ledger (Android MVP)
+# Shahri · شهري (Android)
 
 Personal income and expense tracker for Saudi bank accounts. No AI and no cloud: everything is stored on the phone.
 
@@ -27,7 +27,7 @@ Personal income and expense tracker for Saudi bank accounts. No AI and no cloud:
 2. Android asks to allow installs from your browser/files app: allow it.
 3. Play Protect may warn that the app is from an unknown developer. Choose **Install anyway**. This is expected for an app you built yourself.
 4. On first launch choose **Allow SMS & notifications**.
-   - On Android 13+, if SMS access is blocked as a "restricted setting": Settings → Apps → Household Ledger → ⋮ → **Allow restricted settings**, then grant SMS permission.
+   - On Android 13+, if SMS access is blocked as a "restricted setting": Settings → Apps → Shahri → ⋮ → **Allow restricted settings**, then grant SMS permission.
 5. Updates: install a newer APK over the old one. Data is kept.
 
 ## First-time setup (5 minutes)

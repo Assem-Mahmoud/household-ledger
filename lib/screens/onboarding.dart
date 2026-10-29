@@ -206,16 +206,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final cs = Theme.of(context).colorScheme;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SizedBox(height: 8),
-      Center(
-        child: Container(
-          width: 88,
-          height: 88,
-          decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(24)),
-          child: Icon(Icons.account_balance_wallet_outlined, size: 44, color: cs.onPrimaryContainer),
-        ),
-      ),
+      Center(child: Image.asset('assets/images/logo.png', width: 96, height: 96)),
       const SizedBox(height: 16),
-      Text(tr('Household Ledger'), textAlign: TextAlign.center,
+      Text(tr('Shahri'), textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
       const SizedBox(height: 10),
       T('Track income and spending from your bank SMS, plan each month, and see where your money goes. Everything stays on your phone.',
@@ -266,7 +259,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       const SizedBox(height: 18),
       _title(context, 'Capture spending from your bank SMS',
-          'Household Ledger reads SMS from your bank to record card purchases, transfers and salary. You confirm each one before it counts.'),
+          'Shahri reads SMS from your bank to record card purchases, transfers and salary. You confirm each one before it counts.'),
       Container(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
         decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),
