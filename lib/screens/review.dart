@@ -30,7 +30,14 @@ class ReviewScreen extends StatelessWidget {
       builder: (context, _) {
         final items = app.visiblePending;
         final window = app.reviewWindow;
-        final hidden = app.pending.length - items.length;
+        if (app.reviewAccount != null && app.reviewAccount != -1 && app.account(app.reviewAccount) == null) {
+          app.reviewAccount = null; // the account was removed
+        }
+        final filtered = app.reviewAccount != null;
+        final hidden = filtered ? 0 : app.pending.length - items.length;
+        int count(int? id) => app.pending
+            .where((p) => id == null || (id == -1 ? app.account(p.accountId) == null : p.accountId == id))
+            .length;
         final suggested = items.where((i) => i.categoryId != null).length;
         final cs = Theme.of(context).colorScheme;
         return Scaffold(
@@ -86,11 +93,34 @@ class ReviewScreen extends StatelessWidget {
                             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5)),
                     ]),
                   ),
+                if (app.activeAccounts.isNotEmpty && app.pending.isNotEmpty)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Row(children: [
+                      for (final f in <(int?, String, IconData)>[
+                        (null, tr('All'), Icons.inbox_outlined),
+                        for (final a in app.activeAccounts) (a.id, a.name, accountIcon(a.type)),
+                        (-1, tr('No account'), Icons.help_outline),
+                      ])
+                        if (f.$1 == null || count(f.$1) > 0)
+                          Padding(
+                            padding: const EdgeInsetsDirectional.only(end: 8),
+                            child: ChoiceChip(
+                              avatar: Icon(f.$3, size: 18),
+                              label: Text('${f.$2} · ${count(f.$1)}'),
+                              selected: app.reviewAccount == f.$1,
+                              showCheckmark: false,
+                              onSelected: (_) => app.setReviewAccount(f.$1),
+                            ),
+                          ),
+                    ]),
+                  ),
                 if (items.isEmpty) ...[
                   const SizedBox(height: 48),
                   Icon(Icons.task_alt, size: 56, color: cs.primary),
                   const SizedBox(height: 16),
-                  Text(tr(window != null ? 'Nothing waiting in this range' : 'All caught up'),
+                  Text(tr(filtered ? 'Nothing waiting for this account' : window != null ? 'Nothing waiting in this range' : 'All caught up'),
                       textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 8),
                   Padding(

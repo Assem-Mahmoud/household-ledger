@@ -308,6 +308,7 @@ const arabic = <String, String>{
   "Note (optional)": "ملاحظة (اختياري)",
   "Nothing logged in this period yet.": "لا توجد قيود في هذه الفترة بعد.",
   "Nothing to import. Paste rows with a header line first.": "لا يوجد ما يُستورد. الصق الصفوف مع سطر العناوين أولًا.",
+  "Nothing waiting for this account": "لا يوجد ما ينتظر لهذا الحساب",
   "Nothing waiting in this range": "لا شيء بانتظار المراجعة في هذه الفترة",
   "Notifications:": "الإشعارات:",
   "Notify when a bank SMS arrives": "إشعار عند وصول رسالة بنكية",

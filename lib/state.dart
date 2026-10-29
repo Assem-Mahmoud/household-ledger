@@ -669,6 +669,21 @@ class AppState extends ChangeNotifier {
   /// Date range of the last manual range scan; Review shows only items in it until cleared.
   (DateTime, DateTime)? reviewWindow;
 
+  /// Account filter on the Review tab: null = all, -1 = messages without an account.
+  int? reviewAccount;
+
+  void setReviewAccount(int? id) {
+    reviewAccount = id;
+    notifyListeners();
+  }
+
+  bool _inReviewAccount(SmsItem p) {
+    final f = reviewAccount;
+    if (f == null) return true;
+    if (f == -1) return account(p.accountId) == null;
+    return p.accountId == f;
+  }
+
   void clearReviewWindow() {
     reviewWindow = null;
     notifyListeners();
@@ -676,10 +691,10 @@ class AppState extends ChangeNotifier {
 
   List<SmsItem> get visiblePending {
     final w = reviewWindow;
-    if (w == null) return pending;
+    if (w == null) return pending.where(_inReviewAccount).toList();
     final a = DateTime(w.$1.year, w.$1.month, w.$1.day).millisecondsSinceEpoch;
     final b = DateTime(w.$2.year, w.$2.month, w.$2.day, 23, 59, 59, 999).millisecondsSinceEpoch;
-    return pending.where((p) => p.receivedAt >= a && p.receivedAt <= b).toList();
+    return pending.where((p) => p.receivedAt >= a && p.receivedAt <= b && _inReviewAccount(p)).toList();
   }
 
   /// SMS received before this date are ignored. Null means no cut-off.
