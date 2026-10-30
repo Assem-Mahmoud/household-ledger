@@ -17,7 +17,7 @@ import java.io.FileNotFoundException
 class BackupProvider : ContentProvider() {
 
     companion object {
-        const val AUTHORITY = "com.assem.household_ledger.backups"
+        const val AUTHORITY = "com.assem.shahri.backups"
         fun dir(ctx: android.content.Context): File = File(ctx.filesDir, "backups").apply { mkdirs() }
         fun uriFor(name: String): Uri = Uri.parse("content://$AUTHORITY/$name")
     }

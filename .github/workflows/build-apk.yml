@@ -33,8 +33,17 @@ jobs:
           rm -f test/widget_test.dart   # template test refers to the counter demo app
           for f in android/app/build.gradle android/app/build.gradle.kts; do
             [ -f "$f" ] && sed -i -E 's/minSdk(Version)? *=? *flutter\.minSdkVersion/minSdk = 23/' "$f" || true
+            # the store app id; the Kotlin/Dart package names stay household_ledger
+            [ -f "$f" ] && sed -i -E 's/applicationId *=? *"com\.assem\.household_ledger"/applicationId = "com.assem.shahri"/' "$f" || true
           done
+          grep -n "applicationId" android/app/build.gradle* || true
           grep -n "minSdk" android/app/build.gradle* || true
+
+      - name: Firebase config (from the GOOGLE_SERVICES_JSON secret, when set)
+        env:
+          GSJ: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GSJ" ]; then printf '%s' "$GSJ" > android/app/google-services.json; echo "google-services.json written"; else echo "no Firebase config yet"; fi
 
       - name: Use the permanent signing key
         env:

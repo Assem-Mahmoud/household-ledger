@@ -10,3 +10,4 @@ android/.gradle/
 android/local.properties
 android/app/debug/
 android/app/release/
+android/app/google-services.json

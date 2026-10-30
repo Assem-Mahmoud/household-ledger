@@ -51,7 +51,7 @@
         <!-- Lets Gmail attach backup files from the app's private storage -->
         <provider
             android:name=".BackupProvider"
-            android:authorities="com.assem.household_ledger.backups"
+            android:authorities="com.assem.shahri.backups"
             android:exported="false"
             android:grantUriPermissions="true" />
 
