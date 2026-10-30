@@ -9,12 +9,12 @@ def say(*a):
 async def edge():
     import edge_tts
     ok = 0
-    for v in ["ar-EG-ShakirNeural", "ar-SA-HamedNeural"]:
+    for v in ["ar-SA-HamedNeural"]:
         try:
-            os.makedirs(f"media/vo/out/colloquial/{v}", exist_ok=True)
+            os.makedirs(f"media/vo/out/simple/{v}", exist_ok=True)
             for key, text in lines:
                 c = edge_tts.Communicate(text, v, rate="-3%")
-                await c.save(f"media/vo/out/colloquial/{v}/{key}.mp3")
+                await c.save(f"media/vo/out/simple/{v}/{key}.mp3")
             say("edge ok", v); ok += 1
         except Exception:
             say("edge failed", v, traceback.format_exc())
