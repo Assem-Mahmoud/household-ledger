@@ -13,9 +13,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install edge-tts==7.0.2
-      - run: python media/vo/make.py
+      - run: pip install -U edge-tts piper-tts
+      - run: mkdir -p media/vo/out && python media/vo/make.py
       - name: Commit the audio back to this branch
+        if: always()
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
