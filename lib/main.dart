@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'brand.dart';
+import 'cloud.dart';
 import 'i18n.dart';
 import 'lock.dart';
 
@@ -19,6 +20,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await app.init();
   await AppLock.init();
+  await Cloud.init();
   AppLock.lockNow(); // the PIN is asked for once the opening animation ends
   runApp(const LedgerApp());
 }
@@ -191,6 +193,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       }
     }
     await app.autoBackupIfDue();
+    await Cloud.autoBackupIfDue();
   }
 
   @override

@@ -45,6 +45,23 @@ jobs:
         run: |
           if [ -n "$GSJ" ]; then printf '%s' "$GSJ" > android/app/google-services.json; echo "google-services.json written"; else echo "no Firebase config yet"; fi
 
+      - name: Apply the Google services Gradle plugin (only with a Firebase config)
+        run: |
+          [ -f android/app/google-services.json ] || exit 0
+          if [ -f android/settings.gradle ]; then
+            sed -i -E 's/(id "com\.android\.application" version "[^"]+" apply false)/\1\n    id "com.google.gms.google-services" version "4.4.2" apply false/' android/settings.gradle
+          fi
+          if [ -f android/settings.gradle.kts ]; then
+            sed -i -E 's/(id\("com\.android\.application"\) version "[^"]+" apply false)/\1\n    id("com.google.gms.google-services") version "4.4.2" apply false/' android/settings.gradle.kts
+          fi
+          if [ -f android/app/build.gradle ]; then
+            sed -i -E '0,/id "com\.android\.application"/s//id "com.android.application"\n    id "com.google.gms.google-services"/' android/app/build.gradle
+          fi
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i -E '0,/id\("com\.android\.application"\)/s//id("com.android.application")\n    id("com.google.gms.google-services")/' android/app/build.gradle.kts
+          fi
+          grep -n "google-services\|com.android.application\|kotlin" android/settings.gradle* android/app/build.gradle* || true
+
       - name: Use the permanent signing key
         env:
           LEDGER_KEY_PASSWORD: ${{ secrets.LEDGER_KEY_PASSWORD }}

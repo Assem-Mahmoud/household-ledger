@@ -9,6 +9,8 @@ import '../theme.dart';
 import '../tour.dart';
 import 'help.dart';
 import '../lock.dart';
+import '../cloud.dart';
+import '../format.dart' show shortDate;
 import 'settings.dart' show BackupScreen, SettingsScreen, rescanAfterChange;
 
 /// Your name, how your money month works, and the accounts and cards you spend from.
@@ -48,6 +50,7 @@ class ProfileScreen extends StatelessWidget {
                 IconButton(tooltip: tr('Your name'), icon: const Icon(Icons.edit_outlined), onPressed: () => _editName(context)),
               ]),
             ),
+            const _CloudCard(),
 
             _header(context, 'Your money month'),
             _group([
@@ -409,6 +412,147 @@ class _AccountTile extends StatelessWidget {
             ]),
           ]),
         ),
+      ),
+    );
+  }
+}
+
+/// Optional Google sign-in with a cloud copy of the data.
+class _CloudCard extends StatelessWidget {
+  const _CloudCard();
+
+  Future<void> _signIn(BuildContext context) async {
+    final m = ScaffoldMessenger.of(context);
+    final err = await Cloud.signIn();
+    if (err == null) {
+      final info = await Cloud.info();
+      if (info != null && info.$2 > 0 && app.txns.isEmpty && context.mounted) {
+        await _restore(context, ask: true);
+      } else {
+        final ok = await Cloud.backup();
+        m.showSnackBar(SnackBar(content: Text(tr(ok ? 'Signed in. Your data is backed up to the cloud.' : 'Signed in.'))));
+      }
+    } else if (err.isNotEmpty) {
+      m.showSnackBar(SnackBar(content: Text(tr('Could not sign in: {e}', {'e': err}))));
+    }
+  }
+
+  Future<void> _restore(BuildContext context, {bool ask = true}) async {
+    final m = ScaffoldMessenger.of(context);
+    final info = await Cloud.info();
+    if (!context.mounted) return;
+    if (info == null) {
+      m.showSnackBar(SnackBar(content: Text(tr('No cloud backup yet.'))));
+      return;
+    }
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const T('Restore from the cloud?'),
+        content: Text(tr('The cloud copy from {d} has {n} entries. It replaces everything in the app on this phone.',
+            {'d': info.$1 == null ? '—' : shortDate(info.$1!), 'n': info.$2})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const T('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: const T('Restore')),
+        ],
+      ),
+    );
+    if (go != true) return;
+    final msg = await Cloud.restore();
+    m.showSnackBar(SnackBar(content: Text(msg.isEmpty ? tr('Restored from the cloud.') : msg)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = lc;
+    return ValueListenableBuilder(
+      valueListenable: Cloud.user,
+      builder: (context, u, _) => ValueListenableBuilder<bool>(
+        valueListenable: Cloud.busy,
+        builder: (context, busy, _) {
+          final ms = int.tryParse(app.settings['cloudBackupAt'] ?? '');
+          final last = ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+          return Container(
+            margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(20)),
+            child: u == null
+                ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Row(children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(14)),
+                        child: Icon(Icons.cloud_outlined, color: c.onPrimarySoft),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          T('Back up to your Google account', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: c.text)),
+                          const SizedBox(height: 2),
+                          T('Keep a copy in the cloud and restore it on a new phone. Your SMS texts never leave this phone.',
+                              style: TextStyle(fontSize: 12.5, height: 1.35, color: c.muted)),
+                        ]),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: busy ? null : () => _signIn(context),
+                      icon: const Icon(Icons.login),
+                      label: const T('Sign in with Google'),
+                    ),
+                  ])
+                : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Row(children: [
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundColor: c.primarySoft,
+                        child: Text((u.displayName ?? u.email ?? '?').characters.first.toUpperCase(),
+                            style: TextStyle(fontWeight: FontWeight.w700, color: c.onPrimarySoft)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(u.displayName ?? u.email ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: c.text)),
+                          Text(
+                            last == null ? tr('Cloud backup: not yet') : tr('Cloud backup: {d}', {'d': '${shortDate(last)} ${last.hour.toString().padLeft(2, '0')}:${last.minute.toString().padLeft(2, '0')}'}),
+                            style: TextStyle(fontSize: 12.5, color: c.muted),
+                          ),
+                        ]),
+                      ),
+                      if (busy) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    ]),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          onPressed: busy
+                              ? null
+                              : () async {
+                                  final m = ScaffoldMessenger.of(context);
+                                  final ok = await Cloud.backup();
+                                  m.showSnackBar(SnackBar(content: Text(tr(ok ? 'Backed up to the cloud.' : 'Cloud backup failed. Check your internet connection.'))));
+                                },
+                          icon: const Icon(Icons.cloud_upload_outlined),
+                          label: const T('Back up now'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: busy ? null : () => _restore(context),
+                          icon: const Icon(Icons.cloud_download_outlined),
+                          label: const T('Restore'),
+                        ),
+                      ),
+                    ]),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: TextButton(onPressed: busy ? null : Cloud.signOut, child: const T('Sign out')),
+                    ),
+                  ]),
+          );
+        },
       ),
     );
   }
