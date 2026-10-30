@@ -1,2 +1,1 @@
 edge ok en-US-AndrewNeural
-edge ok en-GB-RyanNeural
