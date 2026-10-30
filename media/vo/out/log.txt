@@ -1,0 +1,5 @@
+edge ok ar-SA-HamedNeural
+edge ok ar-SA-ZariyahNeural
+edge ok ar-JO-TaimNeural
+edge ok ar-EG-SalmaNeural
+piper ok
