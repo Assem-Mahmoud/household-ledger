@@ -9,7 +9,7 @@ def say(*a):
 async def edge():
     import edge_tts
     ok = 0
-    for v in ["en-US-AndrewNeural", "en-GB-RyanNeural"]:
+    for v in ["en-US-AndrewNeural"]:
         try:
             os.makedirs(f"media/vo/out/english/{v}", exist_ok=True)
             for key, text in lines:

@@ -1,11 +1,4 @@
 [
- ["l1", "Every month, the same question: where did my salary go?"],
- ["l2", "So many bank messages. Even more expenses."],
- ["l3", "And at the end of the month, you don't know how much you spent, on what, or what takes most of your salary."],
- ["l4", "With Shahree, all of that is solved."],
- ["l5", "Shahree reads your bank messages automatically. You just confirm with a tap."],
- ["l6", "See exactly where your money goes, as it happens."],
- ["l7", "Even yearly expenses, like school fees and insurance. Shahree tells you how much to save each month."],
- ["l8", "Your data stays on your phone. In English and Arabic, in your own currency."],
- ["l9", "Shahree. Your month, under control. Try it now!"]
+ ["x1", "Once you confirm a merchant, Shahree remembers it, and sorts it for you next time."],
+ ["x2", "Paid cash? Add it yourself in seconds."]
 ]
