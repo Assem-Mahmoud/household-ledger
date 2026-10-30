@@ -10,7 +10,7 @@ import '../tour.dart';
 import 'help.dart';
 import '../lock.dart';
 import '../cloud.dart';
-import '../format.dart' show shortDate;
+import '../periods.dart' show shortDate;
 import 'settings.dart' show BackupScreen, SettingsScreen, rescanAfterChange;
 
 /// Your name, how your money month works, and the accounts and cards you spend from.
