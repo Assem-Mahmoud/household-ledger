@@ -8,6 +8,7 @@ import '../native.dart';
 import '../periods.dart';
 import '../sms_parser.dart';
 import '../state.dart';
+import '../theme.dart';
 import '../widgets.dart';
 import 'teach.dart';
 import 'profile.dart';
