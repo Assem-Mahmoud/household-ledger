@@ -6,6 +6,7 @@ import '../models.dart';
 import '../periods.dart';
 import '../state.dart';
 import '../theme.dart';
+import '../tour.dart';
 import '../widgets.dart';
 import 'profile.dart' show accountIcon, editAccount;
 import 'review.dart' show frequentCategories, pickCategory;
@@ -167,7 +168,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
           label: Text(label, style: const TextStyle(fontSize: 13)),
         );
 
-    return Scaffold(
+    return TourAutoStart(tour: 'quickadd', child: Scaffold(
       backgroundColor: c.card,
       body: SafeArea(
         child: Column(children: [
@@ -191,12 +192,12 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 48),
+              const TourButton(tour: 'quickadd', target: 'info.quickadd'),
             ]),
           ),
           Expanded(
-            child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), children: [
-              GestureDetector(
+            child: ListView(cacheExtent: 3000, padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), children: [
+              TourTarget(id: 'qa.amount', child: GestureDetector(
                 onTap: () {
                   FocusScope.of(context).unfocus();
                   setState(() => padOpen = true);
@@ -219,9 +220,9 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                     Text(tr('Tap to edit the amount'), style: TextStyle(fontSize: 12, color: c.primary, fontWeight: FontWeight.w600)),
                   ]),
               ]),
-              ),
+              )),
               const SizedBox(height: 12),
-              TextField(
+              TourTarget(id: 'qa.merchant', child: TextField(
                 controller: merchantCtl,
                 focusNode: merchantFocus,
                 textCapitalization: TextCapitalization.words,
@@ -244,7 +245,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                           }),
                         ),
                 ),
-              ),
+              )),
               if (recent.isNotEmpty && merchant.isEmpty) ...[
                 const SizedBox(height: 8),
                 SizedBox(
@@ -288,7 +289,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
               const SizedBox(height: 18),
               Text(tr('Category'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted)),
               const SizedBox(height: 8),
-              GridView.count(
+              TourTarget(id: 'qa.cats', child: GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: 4,
@@ -321,11 +322,11 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                     },
                   ),
                 ],
-              ),
+              )),
               const SizedBox(height: 14),
               Text(tr('Paid from'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted)),
               const SizedBox(height: 8),
-              Wrap(spacing: 8, runSpacing: 8, children: [
+              TourTarget(id: 'qa.paid', child: Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final a in app.activeAccounts)
                   ChoiceChip(
                     showCheckmark: false,
@@ -346,7 +347,7 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                     if (app.accounts.length > before) setState(() => accountId = app.accounts.last.id);
                   },
                 ),
-              ]),
+              ])),
             ]),
           ),
           Container(
@@ -385,17 +386,17 @@ class _QuickAddScreenState extends State<QuickAddScreen> {
                 ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: FilledButton(
+                child: TourTarget(id: 'qa.save', child: FilledButton(
                   style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                   onPressed: saving ? null : _save,
                   child: Text(tr(kind == 'income' ? 'Save income' : 'Save expense'), style: const TextStyle(fontSize: 17)),
-                ),
+                )),
               ),
             ]),
           ),
         ]),
       ),
-    );
+    ));
   }
 }
 

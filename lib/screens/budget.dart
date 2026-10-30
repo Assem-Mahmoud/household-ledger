@@ -6,6 +6,7 @@ import '../models.dart';
 import '../state.dart';
 import '../stats.dart';
 import '../theme.dart';
+import '../tour.dart';
 import '../widgets.dart';
 import 'plan.dart';
 
@@ -47,15 +48,15 @@ class _BudgetScreenState extends State<BudgetScreen> with SingleTickerProviderSt
     return Scaffold(
       appBar: AppBar(
         title: const T('Plan'),
-        actions: const [PeriodSwitcher(), SizedBox(width: 12)],
-        bottom: TabBar(
+        actions: const [TourButton(tour: 'plan', target: 'info.plan'), PeriodSwitcher(), SizedBox(width: 12)],
+        bottom: _TourTabBar(TabBar(
           controller: _tabs,
           dividerColor: Colors.transparent,
           indicatorSize: TabBarIndicatorSize.label,
           labelStyle: const TextStyle(fontFamily: appFont, fontSize: 14, fontWeight: FontWeight.w700),
           unselectedLabelStyle: const TextStyle(fontFamily: appFont, fontSize: 14, fontWeight: FontWeight.w500),
           tabs: [Tab(text: tr('Checklist')), Tab(text: tr('Budgets')), Tab(text: tr('Template'))],
-        ),
+        )),
       ),
       body: TabBarView(controller: _tabs, children: const [PlanTab(), _MonthTab(), _TemplateTab()]),
     );
@@ -326,4 +327,14 @@ class _TemplateTab extends StatelessWidget {
     );
     if (ok == true) await app.setSetting('expectedIncome', '${parseAmount(ctl.text) ?? 0}');
   }
+}
+
+/// The Plan tab bar, marked for the page tour.
+class _TourTabBar extends StatelessWidget implements PreferredSizeWidget {
+  final TabBar bar;
+  const _TourTabBar(this.bar);
+  @override
+  Size get preferredSize => bar.preferredSize;
+  @override
+  Widget build(BuildContext context) => TourTarget(id: 'plan.tabs', inset: const EdgeInsets.symmetric(horizontal: 8), child: bar);
 }

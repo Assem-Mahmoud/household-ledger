@@ -7,6 +7,7 @@ import '../periods.dart';
 import '../state.dart';
 import '../stats.dart';
 import '../theme.dart';
+import '../tour.dart';
 import '../widgets.dart';
 import 'entry_form.dart';
 import 'profile.dart';
@@ -49,6 +50,7 @@ class HomeScreen extends StatelessWidget {
                 }
               },
               child: ListView(
+                cacheExtent: 3000,
                 padding: const EdgeInsets.only(bottom: 24),
                 children: [
                   // header: avatar, greeting, month, settings
@@ -70,6 +72,7 @@ class HomeScreen extends StatelessWidget {
                               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text)),
                         ]),
                       ),
+                      const TourButton(tour: 'home', target: 'info.home'),
                       const PeriodSwitcher(),
                       IconButton(
                         tooltip: tr('Settings'),
@@ -79,10 +82,10 @@ class HomeScreen extends StatelessWidget {
                     ]),
                   ),
 
-                  _Hero(per: per, s: s, total: total),
+                  TourTarget(id: 'home.hero', inset: const EdgeInsets.fromLTRB(16, 4, 16, 8), child: _Hero(per: per, s: s, total: total)),
 
                   if (app.pending.isNotEmpty)
-                    _Strip(
+                    TourTarget(id: 'home.strip', inset: const EdgeInsets.fromLTRB(16, 4, 16, 4), child: _Strip(
                       icon: Icons.mark_chat_unread_outlined,
                       title: trn(app.pending.length, '{n} bank message to review', '{n} bank messages to review'),
                       subtitle: () {
@@ -91,7 +94,7 @@ class HomeScreen extends StatelessWidget {
                       }(),
                       action: tr('Review'),
                       onTap: () => app.openActivity(0),
-                    ),
+                    )),
 
                   if (app.backupDue)
                     _Strip(
@@ -107,7 +110,7 @@ class HomeScreen extends StatelessWidget {
                     ),
 
                   // where it went
-                  SectionCard(
+                  TourTarget(id: 'home.where', inset: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), child: SectionCard(
                     title: 'Where it went',
                     trailing: TextButton(onPressed: () => app.tab.value = 2, child: const T('See all')),
                     child: cats.isEmpty
@@ -143,10 +146,10 @@ class HomeScreen extends StatelessWidget {
                                 ]),
                               ),
                           ]),
-                  ),
+                  )),
 
                   // coming up from the plan
-                  SectionCard(
+                  TourTarget(id: 'home.coming', inset: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), child: SectionCard(
                     title: 'Coming up',
                     trailing: TextButton(onPressed: () => app.openPlan(0), child: Text(tr(plan.isEmpty ? 'Set up' : 'Plan'))),
                     child: plan.isEmpty
@@ -179,7 +182,7 @@ class HomeScreen extends StatelessWidget {
                                 ),
                               ),
                           ]),
-                  ),
+                  )),
 
                   if (insights.isNotEmpty)
                     SectionCard(

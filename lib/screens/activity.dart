@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' hide Category;
 import '../i18n.dart';
 import '../state.dart';
 import '../theme.dart';
+import '../tour.dart';
 import '../widgets.dart';
 import 'entries.dart';
 import 'review.dart';
@@ -27,6 +28,7 @@ class ActivityScreen extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(20, 14, 8, 10),
                   child: Row(children: [
                     Expanded(child: Text(tr('Activity'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: c.text))),
+                    TourButton(tour: sub == 0 ? 'review' : 'entries', target: 'info.activity'),
                     if (sub == 0) ...[
                       if (app.scanning)
                         const Padding(

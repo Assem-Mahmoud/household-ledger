@@ -12,6 +12,7 @@ import 'screens/onboarding.dart';
 import 'screens/quick_add.dart';
 import 'state.dart';
 import 'theme.dart';
+import 'tour.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,13 +89,56 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _firstRun());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _firstRun();
+      _autoTour();
+    });
+    app.tab.addListener(_autoTour);
+    app.activitySub.addListener(_autoTour);
+    Tours.request.addListener(_onTourRequest);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    app.tab.removeListener(_autoTour);
+    app.activitySub.removeListener(_autoTour);
+    Tours.request.removeListener(_onTourRequest);
     super.dispose();
+  }
+
+  static const _tabTours = {'home': 0, 'review': 1, 'entries': 1, 'insights': 2, 'plan': 3};
+
+  String _tourForTab() => switch (app.tab.value) {
+        0 => 'home',
+        1 => app.activitySub.value == 0 ? 'review' : 'entries',
+        2 => 'insights',
+        _ => 'plan',
+      };
+
+  /// Plays the visible page's tour the first time it is shown (or when Help & tutorials asked for it).
+  void _autoTour() {
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (!mounted || !app.flag('onboarded')) return;
+      var id = _tourForTab();
+      var force = false;
+      final req = Tours.request.value;
+      if (req != null && _tabTours.containsKey(req)) {
+        Tours.request.value = null;
+        id = req;
+        force = true;
+      }
+      Tours.maybeStart(context, id, force: force);
+    });
+  }
+
+  void _onTourRequest() {
+    final r = Tours.request.value;
+    if (r == null || !_tabTours.containsKey(r)) return;
+    if (r == 'review') app.activitySub.value = 0;
+    if (r == 'entries') app.activitySub.value = 1;
+    app.tab.value = _tabTours[r]!;
+    _autoTour();
   }
 
   @override
@@ -126,7 +170,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     if (!app.flag('onboarded')) {
       return OnboardingScreen(onDone: () {
         setState(() {});
-        WidgetsBinding.instance.addPostFrameCallback((_) => _firstRun());
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _firstRun();
+          _autoTour();
+        });
       });
     }
     return ValueListenableBuilder<int>(
@@ -187,7 +234,7 @@ class _BottomBar extends StatelessWidget {
                   label: tr('Add entry'),
                   child: GestureDetector(
                     onTap: () => Navigator.push(context, MaterialPageRoute(fullscreenDialog: true, builder: (_) => const QuickAddScreen())),
-                    child: Container(
+                    child: TourTarget(id: 'nav.add', child: Container(
                       width: 54,
                       height: 54,
                       decoration: BoxDecoration(
@@ -196,7 +243,7 @@ class _BottomBar extends StatelessWidget {
                         boxShadow: [BoxShadow(color: c.primary.withOpacity(0.35), blurRadius: 14, offset: const Offset(0, 5))],
                       ),
                       child: Icon(Icons.add, size: 28, color: c.onPrimary),
-                    ),
+                    )),
                   ),
                 ),
               ),

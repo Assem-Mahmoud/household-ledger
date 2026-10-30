@@ -8,6 +8,7 @@ import '../periods.dart';
 import '../sms_parser.dart' show foreignCurrency;
 import '../state.dart';
 import '../theme.dart';
+import '../tour.dart';
 import '../widgets.dart';
 import 'profile.dart' show accountIcon, editAccount;
 import 'teach.dart';
@@ -52,6 +53,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         return RefreshIndicator(
           onRefresh: _scan,
           child: ListView(
+            cacheExtent: 3000,
             padding: const EdgeInsets.only(bottom: 24),
             children: [
               if (app.lastAutoAdded > 0)
@@ -88,7 +90,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   ]),
                 ),
               if (app.activeAccounts.isNotEmpty && app.pending.isNotEmpty)
-                SingleChildScrollView(
+                TourTarget(id: 'review.filter', inset: const EdgeInsets.fromLTRB(12, 0, 12, 2), child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
                   child: Row(children: [
@@ -107,7 +109,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                           ),
                         ),
                   ]),
-                ),
+                )),
               if (focused == null) ...[
                 const SizedBox(height: 56),
                 Icon(Icons.task_alt, size: 60, color: c.primary),
@@ -126,7 +128,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   ),
                 ),
               ] else ...[
-                ReviewCard(key: ValueKey(focused.id), item: focused),
+                TourTarget(id: 'review.card', inset: const EdgeInsets.fromLTRB(16, 4, 16, 4), child: ReviewCard(key: ValueKey(focused.id), item: focused)),
                 if (rest.isNotEmpty || suggested > 1)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 12, 4),
@@ -433,6 +435,7 @@ class _ReviewCardState extends State<ReviewCard> {
                 child: Text(hint, style: TextStyle(fontSize: 12.5, color: c.attnText, height: 1.35)),
               ),
             // amount and merchant, tap to edit
+            TourTarget(id: 'review.amount', child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () => _editText('Amount', fmtAuto(amount).replaceAll(',', ''), true, (v) => amount = parseAmount(v) ?? amount),
@@ -463,6 +466,7 @@ class _ReviewCardState extends State<ReviewCard> {
                 ]),
               ),
             ),
+            ])),
             const SizedBox(height: 8),
             WhatForField(controller: noteCtl),
             const SizedBox(height: 8),
@@ -497,6 +501,7 @@ class _ReviewCardState extends State<ReviewCard> {
                 ),
             ]),
             const SizedBox(height: 14),
+            TourTarget(id: 'review.cats', child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text(tr('Category'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted)),
             const SizedBox(height: 8),
             Wrap(spacing: 8, runSpacing: 8, children: [
@@ -510,6 +515,7 @@ class _ReviewCardState extends State<ReviewCard> {
                 },
               ),
             ]),
+            ])),
             if (app.activeAccounts.length > 1) ...[
               const SizedBox(height: 12),
               Text(tr('Paid from'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted)),
@@ -542,7 +548,7 @@ class _ReviewCardState extends State<ReviewCard> {
               ]),
             ),
             const SizedBox(height: 6),
-            Row(children: [
+            TourTarget(id: 'review.actions', child: Row(children: [
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(minimumSize: const Size(0, 52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
@@ -558,7 +564,7 @@ class _ReviewCardState extends State<ReviewCard> {
                   child: const T('Confirm'),
                 ),
               ),
-            ]),
+            ])),
           ]),
         ),
       ]),

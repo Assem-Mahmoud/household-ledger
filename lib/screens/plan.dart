@@ -7,6 +7,7 @@ import '../models.dart';
 import '../periods.dart';
 import '../state.dart';
 import '../theme.dart';
+import '../tour.dart';
 import '../widgets.dart';
 
 /// Monthly checklist: bills to pay and amounts to set aside, ticked off as they happen.
@@ -25,14 +26,17 @@ class PlanTab extends StatelessWidget {
         final doneAmount = lines.where((l) => l.done).fold<double>(0, (a, l) => a + l.target);
         final income = app.expectedIncome;
         return Scaffold(
-          floatingActionButton: FloatingActionButton.extended(
-            heroTag: 'plan-add',
-            onPressed: () => editPlanItem(context, null),
-            icon: const Icon(Icons.add_task),
-            label: const T('Add to plan'),
+          floatingActionButton: TourTarget(
+            id: 'plan.add',
+            child: FloatingActionButton.extended(
+              heroTag: 'plan-add',
+              onPressed: () => editPlanItem(context, null),
+              icon: const Icon(Icons.add_task),
+              label: const T('Add to plan'),
+            ),
           ),
-          body: ListView(padding: const EdgeInsets.only(bottom: 96), children: [
-            SectionCard(
+          body: ListView(cacheExtent: 3000, padding: const EdgeInsets.only(bottom: 96), children: [
+            TourTarget(id: 'plan.progress', inset: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), child: SectionCard(
               child: lines.isEmpty
                   ? T(
                       'Plan what must happen each month: rent to pay, school fees, an amount to save. '
@@ -79,7 +83,7 @@ class PlanTab extends StatelessWidget {
                         ]),
                       ),
                     ]),
-            ),
+            )),
             if (lines.isNotEmpty)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -87,7 +91,7 @@ class PlanTab extends StatelessWidget {
                 decoration: BoxDecoration(color: lc.card, borderRadius: BorderRadius.circular(20)),
                 child: Column(children: [for (final l in lines) PlanTile(l, per: per)]),
               ),
-            const YearlySection(),
+            const TourTarget(id: 'plan.yearly', inset: EdgeInsets.fromLTRB(16, 10, 16, 6), child: YearlySection()),
           ]),
         );
       },

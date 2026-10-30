@@ -8,6 +8,7 @@ import '../state.dart';
 import '../stats.dart';
 import '../widgets.dart';
 import '../theme.dart';
+import '../tour.dart';
 import 'home.dart' show EntryRow;
 import 'profile.dart' show accountIcon;
 
@@ -103,10 +104,13 @@ class _EntriesScreenState extends State<EntriesScreen> {
           ));
         }
 
+        // the first day's card is what the tour points at
+        if (rows.length >= 2) rows[1] = TourTarget(id: 'entries.list', inset: const EdgeInsets.symmetric(horizontal: 16), child: rows[1]);
+
         return Container(
           color: c.bg,
           child: Column(children: [
-            Padding(
+            TourTarget(id: 'entries.search', inset: const EdgeInsets.fromLTRB(16, 4, 16, 4), child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
               child: TextField(
                 controller: searchCtl,
@@ -127,8 +131,8 @@ class _EntriesScreenState extends State<EntriesScreen> {
                 ),
                 onChanged: (v) => setState(() => query = v),
               ),
-            ),
-            SingleChildScrollView(
+            )),
+            TourTarget(id: 'entries.filters', inset: const EdgeInsets.symmetric(horizontal: 12), child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(children: [
@@ -207,7 +211,7 @@ class _EntriesScreenState extends State<EntriesScreen> {
                   },
                 ),
               ]),
-            ),
+            )),
             if (accountFilter == -1 && list.isNotEmpty && app.activeAccounts.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),

@@ -8,6 +8,7 @@ import '../periods.dart';
 import '../state.dart';
 import '../stats.dart';
 import '../theme.dart';
+import '../tour.dart';
 import '../widgets.dart';
 import 'profile.dart' show accountIcon;
 
@@ -63,12 +64,13 @@ class AnalyticsScreen extends StatelessWidget {
           appBar: AppBar(
             title: const T('Insights'),
             centerTitle: false,
-            actions: const [PeriodSwitcher(), SizedBox(width: 12)],
+            actions: const [TourButton(tour: 'insights', target: 'info.insights'), PeriodSwitcher(), SizedBox(width: 12)],
           ),
           body: ListView(
+            cacheExtent: 3000,
             padding: const EdgeInsets.only(top: 4, bottom: 32),
             children: [
-              SectionCard(
+              TourTarget(id: 'ins.donut', inset: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), child: SectionCard(
                 child: cats.isEmpty
                     ? T('No spending in this period.', style: TextStyle(color: cs.onSurfaceVariant))
                     : Row(children: [
@@ -109,10 +111,10 @@ class AnalyticsScreen extends StatelessWidget {
                           ]),
                         ),
                       ]),
-              ),
+              )),
 
-              for (final t in tips.take(4))
-                Container(
+              for (final (k, t) in tips.take(4).indexed)
+                TourTarget(id: k == 0 ? 'ins.tips' : 'ins.tip$k', inset: const EdgeInsets.symmetric(horizontal: 16, vertical: 5), child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(color: lc.card, borderRadius: BorderRadius.circular(18)),
@@ -136,7 +138,7 @@ class AnalyticsScreen extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(child: Text(t.text, style: TextStyle(fontSize: 14, height: 1.4, color: lc.text))),
                   ]),
-                ),
+                )),
 
               SectionCard(
                 title: 'Last 6 months',
@@ -221,7 +223,7 @@ class AnalyticsScreen extends StatelessWidget {
                   ]),
                 ),
               if (topItems(s).isNotEmpty)
-                SectionCard(
+                TourTarget(id: 'ins.top', inset: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), child: SectionCard(
                   title: 'Top items',
                   child: Column(children: [
                     for (final it in topItems(s))
@@ -240,7 +242,7 @@ class AnalyticsScreen extends StatelessWidget {
                         onTap: () => app.searchEntries(it.name),
                       ),
                   ]),
-                ),
+                )),
               SectionCard(
                 title: 'Top merchants',
                 child: merchants.isEmpty

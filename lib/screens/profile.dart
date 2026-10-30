@@ -6,6 +6,8 @@ import '../i18n.dart';
 import '../state.dart';
 import '../widgets.dart';
 import '../theme.dart';
+import '../tour.dart';
+import 'help.dart';
 import 'settings.dart' show BackupScreen, SettingsScreen, rescanAfterChange;
 
 /// Your name, how your money month works, and the accounts and cards you spend from.
@@ -19,9 +21,9 @@ class ProfileScreen extends StatelessWidget {
       builder: (context, _) {
         final name = app.userName;
         final spend = app.byAccount(app.period);
-        return Scaffold(
-          appBar: AppBar(title: const T('Profile')),
-          body: ListView(padding: const EdgeInsets.only(bottom: 40), children: [
+        return TourAutoStart(tour: 'profile', child: Scaffold(
+          appBar: AppBar(title: const T('Profile'), actions: const [TourButton(tour: 'profile', target: 'info.profile'), SizedBox(width: 8)]),
+          body: ListView(cacheExtent: 3000, padding: const EdgeInsets.only(bottom: 40), children: [
             SectionCard(
               child: Row(children: [
                 const Avatar(size: 56),
@@ -100,12 +102,16 @@ class ProfileScreen extends StatelessWidget {
                   ]);
                 }),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-              child: OutlinedButton.icon(
-                onPressed: () => editAccount(context, null),
-                icon: const Icon(Icons.add_card),
-                label: const T('Add account or card'),
+            TourTarget(
+              id: 'profile.add',
+              inset: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                child: OutlinedButton.icon(
+                  onPressed: () => editAccount(context, null),
+                  icon: const Icon(Icons.add_card),
+                  label: const T('Add account or card'),
+                ),
               ),
             ),
             const _UnnamedCards(),
@@ -127,7 +133,7 @@ class ProfileScreen extends StatelessWidget {
                   },
                 ),
               ),
-              ListTile(
+              TourTarget(id: 'profile.backup', child: ListTile(
                 leading: const Icon(Icons.cloud_upload_outlined),
                 title: const T('Backup & restore'),
                 subtitle: Text(app.backupUri.isNotEmpty
@@ -135,7 +141,14 @@ class ProfileScreen extends StatelessWidget {
                     : tr('Turn on automatic backup')),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen())),
-              ),
+              )),
+              TourTarget(id: 'profile.help', child: ListTile(
+                leading: const Icon(Icons.school_outlined),
+                title: const T('Help & tutorials'),
+                subtitle: const T('Guided tours of each page'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpScreen())),
+              )),
               ListTile(
                 leading: const Icon(Icons.settings_outlined),
                 title: const T('All settings'),
@@ -145,7 +158,7 @@ class ProfileScreen extends StatelessWidget {
               ),
             ]),
           ]),
-        );
+        ));
       },
     );
   }
