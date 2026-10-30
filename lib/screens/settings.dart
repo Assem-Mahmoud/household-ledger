@@ -97,7 +97,7 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => scanRange(context),
             ),
             ListTile(
-              title: const T('Bank senders'),
+              title: const T('Your banks'),
               subtitle: Text(app.lines('senders').isEmpty
                   ? tr('Automatic: any SMS that looks like a transaction')
                   : tr('Only: {list}', {'list': app.lines('senders').join(', ')})),
@@ -617,24 +617,41 @@ Future<void> scanRange(BuildContext context) async {
 
 // --------------------------------------------------------------- senders
 
-/// Choose which SMS senders are banks, from the senders found in the phone's messages.
-class SendersScreen extends StatefulWidget {
-  const SendersScreen({super.key});
-  @override
-  State<SendersScreen> createState() => _SendersScreenState();
+/// Sender names that are almost certainly banks or wallets; used to pre-tick them.
+const _bankHints = [
+  'bank', 'rajhi', 'ahli', 'snb', 'riyad', 'sabb', 'anb', 'bilad', 'inma', 'jazira', 'saib', 'fransi', 'bsf',
+  'stcpay', 'urpay', 'barq', 'd360', 'meem', 'nbe', 'cib', 'misr', 'qnb', 'alex', 'hsbc', 'enbd', 'adcb', 'fab',
+  'mashreq', 'kfh', 'nbk', 'boubyan', 'emirates', 'mada',
+];
+bool looksLikeBank(String sender) {
+  final s = sender.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  return _bankHints.any(s.contains);
 }
 
-class _SendersScreenState extends State<SendersScreen> {
+/// The list of senders found in the phone's messages, to tick the user's banks. Used in setup, Review and Settings.
+class BankPicker extends StatefulWidget {
+  final Set<String> selected; // lower-case sender names; edited in place
+  final VoidCallback onChanged;
+  final bool preselect; // tick likely banks when nothing is chosen yet
+  const BankPicker({super.key, required this.selected, required this.onChanged, this.preselect = false});
+  @override
+  State<BankPicker> createState() => _BankPickerState();
+}
+
+class _BankPickerState extends State<BankPicker> {
   List<(String, int)>? found;
-  late Set<String> selected;
   final manualCtl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    selected = app.lines('senders').toSet();
     app.detectSenders().then((v) {
-      if (mounted) setState(() => found = v);
+      if (!mounted) return;
+      setState(() => found = v);
+      if (widget.preselect && widget.selected.isEmpty) {
+        widget.selected.addAll(v.where((f) => looksLikeBank(f.$1)).map((f) => f.$1.toLowerCase()));
+        widget.onChanged();
+      }
     });
   }
 
@@ -643,6 +660,98 @@ class _SendersScreenState extends State<SendersScreen> {
     manualCtl.dispose();
     super.dispose();
   }
+
+  void _toggle(String s, bool on) {
+    setState(() => on ? widget.selected.add(s) : widget.selected.remove(s));
+    widget.onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = lc;
+    final sel = widget.selected;
+    final known = found?.map((e) => e.$1.toLowerCase()).toSet() ?? <String>{};
+    final extra = sel.where((s) => !known.contains(s)).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(color: sel.isEmpty ? c.attnBg : c.primarySoft, borderRadius: BorderRadius.circular(14)),
+        child: Row(children: [
+          Icon(sel.isEmpty ? Icons.auto_awesome : Icons.account_balance, size: 20, color: sel.isEmpty ? c.attnText : c.onPrimarySoft),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              sel.isEmpty
+                  ? tr('No bank picked: any message that looks like a bank transaction is read.')
+                  : trn(sel.length, 'Only messages from {n} bank are read.', 'Only messages from these {n} banks are read.'),
+              style: TextStyle(fontSize: 13, height: 1.35, color: sel.isEmpty ? c.attnText : c.onPrimarySoft),
+            ),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 6),
+      if (found == null)
+        const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+      else if (found!.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: T('No bank messages found on this phone yet. Add your bank\'s sender name below, or skip for now.',
+              style: TextStyle(color: c.muted, height: 1.4)),
+        )
+      else
+        for (final f in found!)
+          CheckboxListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            value: sel.contains(f.$1.toLowerCase()),
+            secondary: CircleAvatar(
+              backgroundColor: looksLikeBank(f.$1) ? c.primarySoft : c.raised,
+              child: Icon(looksLikeBank(f.$1) ? Icons.account_balance : Icons.sms_outlined, size: 20, color: looksLikeBank(f.$1) ? c.onPrimarySoft : c.muted),
+            ),
+            title: Text(f.$1, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(trn(f.$2, '{n} transaction message in the last 4 months', '{n} transaction messages in the last 4 months')),
+            onChanged: (v) => _toggle(f.$1.toLowerCase(), v == true),
+          ),
+      for (final e in extra)
+        CheckboxListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          value: true,
+          secondary: CircleAvatar(backgroundColor: c.primarySoft, child: Icon(Icons.account_balance, size: 20, color: c.onPrimarySoft)),
+          title: Text(e),
+          subtitle: const T('Added manually'),
+          onChanged: (_) => _toggle(e, false),
+        ),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(
+          child: TextField(
+            controller: manualCtl,
+            decoration: InputDecoration(isDense: true, labelText: tr('Add a sender name'), hintText: tr('e.g. AlRajhiBank'), border: const OutlineInputBorder()),
+          ),
+        ),
+        const SizedBox(width: 8),
+        FilledButton.tonal(
+          onPressed: () {
+            final t = manualCtl.text.trim().toLowerCase();
+            if (t.isEmpty) return;
+            manualCtl.clear();
+            _toggle(t, true);
+          },
+          child: const T('Add'),
+        ),
+      ]),
+    ]);
+  }
+}
+
+/// Choose which SMS senders are banks, from the senders found in the phone's messages.
+class SendersScreen extends StatefulWidget {
+  const SendersScreen({super.key});
+  @override
+  State<SendersScreen> createState() => _SendersScreenState();
+}
+
+class _SendersScreenState extends State<SendersScreen> {
+  late Set<String> selected = app.lines('senders').toSet();
 
   Future<void> _save() async {
     await app.setSetting('senders', selected.join('\n'));
@@ -653,76 +762,15 @@ class _SendersScreenState extends State<SendersScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final known = found?.map((e) => e.$1.toLowerCase()).toSet() ?? <String>{};
-    final extra = selected.where((s) => !known.contains(s)).toList();
-    return Scaffold(
-      appBar: AppBar(
-        title: const T('Bank senders'),
-        actions: [TextButton(onPressed: _save, child: const T('Save'))],
-      ),
-      body: ListView(padding: const EdgeInsets.only(bottom: 32), children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-          child: Text(
-            tr(selected.isEmpty
-                ? 'No senders selected: any message that looks like a transaction is read. Tick your banks to read only their messages.'
-                : 'Only messages from the ticked senders are read.'),
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const T('Your banks'),
+          actions: [TextButton(onPressed: _save, child: const T('Save'))],
         ),
-        if (found == null)
-          const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
-        else if (found!.isEmpty)
-          const ListTile(title: T('No transaction messages found in the last 4 months.'))
-        else
-          for (final f in found!)
-            CheckboxListTile(
-              value: selected.contains(f.$1.toLowerCase()),
-              title: Text(f.$1),
-              subtitle: Text(trn(f.$2, '{n} transaction message in the last 4 months', '{n} transaction messages in the last 4 months')),
-              onChanged: (v) => setState(() {
-                if (v == true) {
-                  selected.add(f.$1.toLowerCase());
-                } else {
-                  selected.remove(f.$1.toLowerCase());
-                }
-              }),
-            ),
-        for (final e in extra)
-          CheckboxListTile(
-            value: true,
-            title: Text(e),
-            subtitle: const T('Added manually'),
-            onChanged: (_) => setState(() => selected.remove(e)),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-          child: Row(children: [
-            Expanded(
-              child: TextField(
-                controller: manualCtl,
-                decoration: InputDecoration(isDense: true, labelText: tr('Add a sender name'), border: const OutlineInputBorder()),
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonal(
-              onPressed: () {
-                final t = manualCtl.text.trim().toLowerCase();
-                if (t.isEmpty) return;
-                setState(() {
-                  selected.add(t);
-                  manualCtl.clear();
-                });
-              },
-              child: const T('Add'),
-            ),
-          ]),
-        ),
-      ]),
-    );
-  }
+        body: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
+          BankPicker(selected: selected, onChanged: () => setState(() {})),
+        ]),
+      );
 }
 
 /// Opens the share sheet with a backup file (WhatsApp, email, Drive…).

@@ -41,6 +41,7 @@ List<TourDef> tourDefs() => [
         TourStep('review.cats', tr('Pick a category'), tr('Your usual ones come first. With remember ticked, this merchant is sorted for you next time.'), radius: 12),
         TourStep('review.actions', tr('Confirm or skip'), tr('Confirm to count it. Not spending is for refunds and moves between your own accounts.'), radius: 16),
         TourStep('review.filter', tr('Filter by card'), tr('Show only one card\'s or account\'s messages.'), radius: 18),
+        TourStep('review.banks', tr('Your banks'), tr('Pick which banks are read. Tap Change to add or remove one.'), radius: 16),
         TourStep('info.activity', tr('Replay any time'), tr('Tap ⓘ to see this page\'s tour again.'), radius: 24),
       ]),
       TourDef('quickadd', tr('Quick add (+)'), Icons.add_circle_outline, 'qa.amount', [

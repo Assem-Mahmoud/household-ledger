@@ -9,6 +9,7 @@ import '../sms_parser.dart' show foreignCurrency;
 import '../state.dart';
 import '../theme.dart';
 import '../tour.dart';
+import 'settings.dart' show SendersScreen;
 import '../widgets.dart';
 import 'profile.dart' show accountIcon, editAccount;
 import 'teach.dart';
@@ -88,6 +89,40 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     if (hidden > 0)
                       Text(tr('{n} more outside this range', {'n': hidden}), style: TextStyle(color: c.muted, fontSize: 12.5)),
                   ]),
+                ),
+              if (app.flag('smsOn'))
+                TourTarget(
+                  id: 'review.banks',
+                  inset: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+                    child: Material(
+                      color: c.card,
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SendersScreen())),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          child: Row(children: [
+                            Icon(Icons.account_balance, size: 20, color: c.primary),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                app.lines('senders').isEmpty
+                                    ? tr('Banks: any bank-looking SMS')
+                                    : tr('Banks: {list}', {'list': app.lines('senders').join(', ')}),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 13.5, color: c.text),
+                              ),
+                            ),
+                            Text(tr('Change'), style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: c.primary)),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               if (app.activeAccounts.isNotEmpty && app.pending.isNotEmpty)
                 TourTarget(id: 'review.filter', inset: const EdgeInsets.fromLTRB(12, 0, 12, 2), child: SingleChildScrollView(

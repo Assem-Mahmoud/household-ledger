@@ -9,7 +9,7 @@ import '../periods.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets.dart';
-import 'settings.dart' show importStatementFlow, restoreBackupFlow;
+import 'settings.dart' show BankPicker, importStatementFlow, restoreBackupFlow;
 
 /// First-run setup: language → SMS disclosure → month & income → categories → where to start.
 class OnboardingScreen extends StatefulWidget {
@@ -21,7 +21,9 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const _steps = 5;
+  List<Widget Function(BuildContext)> get _pages => [_language, _disclosure, if (smsAllowed) _banks, _month, _categories, _start];
+  int get _steps => _pages.length;
+  final Set<String> banks = {};
   int step = 0;
   int _dir = 1; // slide direction between steps
   static bool _brandPlayed = false; // the logo animation plays once, not on every language switch
@@ -95,6 +97,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       }
     }
     await app.setSetting('smsOn', smsAllowed ? '1' : '0', notify: false);
+    if (smsAllowed) await app.setSetting('senders', banks.join('\n'), notify: false);
     if (smsAllowed) {
       final now = DateTime.now();
       final from = switch (start) {
@@ -122,7 +125,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final pages = [_language, _disclosure, _month, _categories, _start];
+    final pages = _pages;
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -315,6 +318,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       const SizedBox(height: 12),
       T('Android asks for permission next. You can change this any time in Settings.',
           style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+    ]);
+  }
+
+  Widget _banks(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _title(context, 'Which banks do you use?',
+          'Pick your banks so only their messages are read. We ticked the ones that look like banks. Not sure? Leave it empty and any message that looks like a bank transaction is read.'),
+      BankPicker(selected: banks, preselect: true, onChanged: () => setState(() {})),
+      const SizedBox(height: 10),
+      T('You can change this any time from the To review page or Settings.', style: TextStyle(fontSize: 12.5, color: lc.muted)),
     ]);
   }
 
