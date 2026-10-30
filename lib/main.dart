@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'brand.dart';
 import 'i18n.dart';
 
 import 'screens/activity.dart';
@@ -44,9 +45,32 @@ class LedgerApp extends StatelessWidget {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        home: const Shell(),
+        home: const _Root(),
       );
       },
+    );
+  }
+}
+
+/// Shows the opening animation once per launch, then fades into the app.
+class _Root extends StatefulWidget {
+  const _Root();
+  @override
+  State<_Root> createState() => _RootState();
+}
+
+class _RootState extends State<_Root> {
+  static bool introShown = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.of(context).disableAnimations) introShown = true;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 380),
+      switchInCurve: Curves.easeOut,
+      child: introShown
+          ? const Shell()
+          : ShahriIntro(onDone: () => setState(() => introShown = true)),
     );
   }
 }

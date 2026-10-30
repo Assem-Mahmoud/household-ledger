@@ -678,4 +678,9 @@ const arabic = <String, String>{
   "{p}% of spending · {n} entry": "{p}% من المصروفات · العمليات: {n}",
   "{p}% of the monthly budget used": "تم استخدام {p}% من الميزانية الشهرية",
   "العربية": "العربية",
+  "Your month, under control": "شهرك تحت السيطرة",
+  "Your bank · 08:15": "البنك · 08:15",
+  "Purchase: SAR 45.50 at LULU HYPERMARKET. Card ending 1234.": "شراء: 45.50 ر.س لدى لولو هايبرماركت. البطاقة المنتهية بـ 1234.",
+  "Lulu Hypermarket": "لولو هايبرماركت",
+  "Groceries · Main card ··1234": "البقالة · البطاقة الرئيسية ··1234",
 };

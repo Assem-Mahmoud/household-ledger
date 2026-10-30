@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart' hide Category;
 
+import '../brand.dart';
 import '../format.dart';
 import '../i18n.dart';
 import '../models.dart';
 import '../native.dart';
 import '../periods.dart';
 import '../state.dart';
+import '../theme.dart';
 import '../widgets.dart';
 import 'settings.dart' show importStatementFlow, restoreBackupFlow;
 
@@ -21,6 +23,8 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   static const _steps = 5;
   int step = 0;
+  int _dir = 1; // slide direction between steps
+  static bool _brandPlayed = false; // the logo animation plays once, not on every language switch
   bool smsAllowed = false;
   bool payday = false;
   int paydayDay = 27;
@@ -56,8 +60,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
-  void _next() => setState(() => step = (step + 1).clamp(0, _steps - 1).toInt());
-  void _back() => setState(() => step = (step - 1).clamp(0, _steps - 1).toInt());
+  void _next() => setState(() {
+        _dir = 1;
+        step = (step + 1).clamp(0, _steps - 1).toInt();
+      });
+  void _back() => setState(() {
+        _dir = -1;
+        step = (step - 1).clamp(0, _steps - 1).toInt();
+      });
 
   Future<void> _sms(bool allow) async {
     setState(() => busy = true);
@@ -137,7 +147,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ],
             ]),
             const SizedBox(height: 24),
-            Expanded(child: SingleChildScrollView(child: pages[step](context))),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 320),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, if (current != null) current]),
+                transitionBuilder: (child, anim) {
+                  final incoming = child.key == ValueKey(step);
+                  final rtl = Directionality.of(context) == TextDirection.rtl;
+                  final dx = (incoming ? 0.25 : -0.25) * _dir * (rtl ? -1 : 1);
+                  return FadeTransition(
+                    opacity: anim,
+                    child: SlideTransition(position: Tween(begin: Offset(dx, 0), end: Offset.zero).animate(anim), child: child),
+                  );
+                },
+                child: SingleChildScrollView(key: ValueKey(step), child: pages[step](context)),
+              ),
+            ),
             const SizedBox(height: 12),
             _buttons(context),
           ]),
@@ -204,26 +231,49 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _language(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    if (!_brandPlayed) Future.delayed(const Duration(milliseconds: 2000), () => _brandPlayed = true);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const SizedBox(height: 8),
-      Center(child: Image.asset('assets/images/logo.png', width: 96, height: 96)),
-      const SizedBox(height: 16),
-      Text(tr('Shahri'), textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-      const SizedBox(height: 10),
-      T('Track income and spending from your bank SMS, plan each month, and see where your money goes. Everything stays on your phone.',
-          textAlign: TextAlign.center, style: TextStyle(fontSize: 15, height: 1.45, color: cs.onSurfaceVariant)),
-      const SizedBox(height: 28),
-      T('Choose your language', style: TextStyle(fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
-      const SizedBox(height: 10),
-      _Choice(
-        title: 'العربية',
-        subtitle: tr('Right-to-left layout'),
-        selected: lang == 'ar',
-        onTap: () => app.setLanguagePref('ar'),
-        raw: true,
+      Center(
+        child: _brandPlayed
+            ? const BrandTile(size: 100)
+            : Play(ms: 1100, builder: (context, t) => BrandTile(size: 100, progress: t)),
       ),
-      _Choice(title: 'English', selected: lang == 'en', onTap: () => app.setLanguagePref('en'), raw: true),
+      const SizedBox(height: 20),
+      Center(
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: _brandPlayed
+              ? const Wordmark(height: 44)
+              : Play(ms: 1500, delay: 250, builder: (context, t) => Wordmark(height: 44, progress: t)),
+        ),
+      ),
+      const SizedBox(height: 12),
+      Entrance(
+        delay: _brandPlayed ? 0 : 450,
+        child: T('Track income and spending from your bank SMS, plan each month, and see where your money goes. Everything stays on your phone.',
+            textAlign: TextAlign.center, style: TextStyle(fontSize: 15, height: 1.45, color: cs.onSurfaceVariant)),
+      ),
+      const SizedBox(height: 28),
+      Entrance(
+        delay: _brandPlayed ? 0 : 600,
+        child: T('Choose your language', style: TextStyle(fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
+      ),
+      const SizedBox(height: 10),
+      Entrance(
+        delay: _brandPlayed ? 0 : 700,
+        child: _Choice(
+          title: 'العربية',
+          subtitle: tr('Right-to-left layout'),
+          selected: lang == 'ar',
+          onTap: () => app.setLanguagePref('ar'),
+          raw: true,
+        ),
+      ),
+      Entrance(
+        delay: _brandPlayed ? 0 : 800,
+        child: _Choice(title: 'English', selected: lang == 'en', onTap: () => app.setLanguagePref('en'), raw: true),
+      ),
     ]);
   }
 
@@ -248,15 +298,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ]),
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Align(
-        alignment: AlignmentDirectional.centerStart,
-        child: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(18)),
-          child: Icon(Icons.sms_outlined, size: 30, color: cs.onPrimaryContainer),
-        ),
-      ),
+      const SmsDemo(),
       const SizedBox(height: 18),
       _title(context, 'Capture spending from your bank SMS',
           'Shahri reads SMS from your bank to record card purchases, transfers and salary. You confirm each one before it counts.'),
@@ -264,10 +306,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
         decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),
         child: Column(children: [
-          point('Reads:', 'messages that look like bank transactions — amount, merchant, date.'),
-          point('Ignores:', 'personal messages and one-time passwords.'),
-          point('Stays on this phone:', 'nothing is uploaded or shared. Backups go only where you send them.'),
-          point('Notifications:', 'budget warnings, new-transaction alerts and a daily reminder.'),
+          Entrance(delay: 350, child: point('Reads:', 'messages that look like bank transactions — amount, merchant, date.')),
+          Entrance(delay: 450, child: point('Ignores:', 'personal messages and one-time passwords.')),
+          Entrance(delay: 550, child: point('Stays on this phone:', 'nothing is uploaded or shared. Backups go only where you send them.')),
+          Entrance(delay: 650, child: point('Notifications:', 'budget warnings, new-transaction alerts and a daily reminder.')),
         ]),
       ),
       const SizedBox(height: 12),
@@ -490,6 +532,137 @@ class _Choice extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Step 2 illustration: a bank SMS arrives, gets read, and becomes a neat entry. Tap to replay.
+class SmsDemo extends StatelessWidget {
+  const SmsDemo({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = lc;
+    return Play(
+      ms: 2600,
+      delay: 150,
+      replay: true,
+      builder: (context, t) {
+        final smsIn = Curves.easeOutCubic.transform(brandSeg(t, 0, 0.15));
+        final scan = brandSeg(t, 0.17, 0.42);
+        final dim = brandSeg(t, 0.45, 0.58);
+        final arrow = brandSeg(t, 0.48, 0.58);
+        final entry = Curves.easeOutBack.transform(brandSeg(t, 0.55, 0.75));
+        final tick = brandSeg(t, 0.76, 0.88);
+        final tickScale = tick < 0.6 ? tick / 0.6 * 1.2 : 1.2 - 0.2 * (tick - 0.6) / 0.4;
+        return Container(
+          height: 262,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: c.primarySoft, borderRadius: BorderRadius.circular(22)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Opacity(
+              opacity: smsIn * (1 - 0.6 * dim),
+              child: Transform.translate(
+                offset: Offset(-30 * (1 - smsIn), -6 * dim),
+                child: Transform.scale(
+                  scale: 1 - 0.05 * dim,
+                  child: Container(
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: c.card,
+                      borderRadius: const BorderRadiusDirectional.only(
+                        topStart: Radius.circular(16), topEnd: Radius.circular(16),
+                        bottomEnd: Radius.circular(16), bottomStart: Radius.circular(4),
+                      ),
+                      boxShadow: [BoxShadow(color: c.primary.withOpacity(0.10), blurRadius: 8, offset: const Offset(0, 2))],
+                    ),
+                    child: Stack(children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          T('Your bank · 08:15', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.muted)),
+                          const SizedBox(height: 4),
+                          T('Purchase: SAR 45.50 at LULU HYPERMARKET. Card ending 1234.',
+                              style: TextStyle(fontSize: 13.5, height: 1.45, color: c.text)),
+                        ]),
+                      ),
+                      if (scan > 0 && scan < 1)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: 70 * scan,
+                          child: Container(
+                            height: 3,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(colors: [Color(0x00E8912D), brandGold, Color(0x00E8912D)]),
+                            ),
+                          ),
+                        ),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Opacity(
+              opacity: arrow,
+              child: Transform.translate(
+                offset: Offset(0, -6 * (1 - arrow)),
+                child: Icon(Icons.arrow_downward_rounded, color: c.primary, size: 24),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Opacity(
+              opacity: entry.clamp(0.0, 1.0).toDouble(),
+              child: Transform.translate(
+                offset: Offset(0, 24 * (1 - entry)),
+                child: Stack(clipBehavior: Clip.none, children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: c.card,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: c.primary.withOpacity(0.16), blurRadius: 16, offset: const Offset(0, 6))],
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(color: c.attnBg, borderRadius: BorderRadius.circular(13)),
+                        child: const Icon(Icons.shopping_cart_outlined, color: brandGold, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          T('Lulu Hypermarket', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: c.text)),
+                          T('Groceries · Main card ··1234', style: TextStyle(fontSize: 12.5, color: c.muted)),
+                        ]),
+                      ),
+                      Text('45.50', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: c.text)),
+                    ]),
+                  ),
+                  PositionedDirectional(
+                    top: -9,
+                    end: -7,
+                    child: Opacity(
+                      opacity: tick.clamp(0.0, 1.0).toDouble(),
+                      child: Transform.scale(
+                        scale: tickScale,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle, border: Border.all(color: c.card, width: 2)),
+                          child: Icon(Icons.check, size: 14, color: c.onPrimary),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ]),
+        );
+      },
     );
   }
 }
