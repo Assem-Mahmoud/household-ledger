@@ -66,7 +66,7 @@ class _RootState extends State<_Root> {
   Widget build(BuildContext context) {
     if (MediaQuery.of(context).disableAnimations) introShown = true;
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 550),
       switchInCurve: Curves.easeOut,
       child: introShown
           ? const Shell()

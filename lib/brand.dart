@@ -300,7 +300,7 @@ class BrandTile extends StatelessWidget {
 // ---------------------------------------------------------------- opening animation
 
 /// Plays once at launch on the brand green: wallet rises, notes slide out, the $ coin drops in,
-/// the title writes in and its gold dots drop, then the slogan. Calls [onDone] at the end.
+/// the title writes in and its gold dots drop, then the slogan (2.8 s), holds 1.3 s, then calls [onDone].
 class ShahriIntro extends StatefulWidget {
   final VoidCallback onDone;
   const ShahriIntro({super.key, required this.onDone});
@@ -309,12 +309,12 @@ class ShahriIntro extends StatefulWidget {
 }
 
 class _ShahriIntroState extends State<ShahriIntro> with SingleTickerProviderStateMixin {
-  late final AnimationController c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1700));
+  late final AnimationController c = AnimationController(vsync: this, duration: const Duration(milliseconds: 2800));
 
   @override
   void initState() {
     super.initState();
-    c.forward().whenComplete(() => Future.delayed(const Duration(milliseconds: 220), () {
+    c.forward().whenComplete(() => Future.delayed(const Duration(milliseconds: 1300), () {
           if (mounted) widget.onDone();
         }));
   }
