@@ -13,7 +13,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'state.dart';
 
 /// OAuth "Web client ID" of the Firebase project (Authentication → Google → Web SDK configuration).
-const webClientId = String.fromEnvironment('WEB_CLIENT_ID');
+const webClientId = String.fromEnvironment('WEB_CLIENT_ID', defaultValue: '931030887336-kbg4toucr7fup56gqkmtmu4kfk2ancg7.apps.googleusercontent.com');
 
 class Cloud {
   static bool ready = false;
