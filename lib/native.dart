@@ -91,7 +91,7 @@ class Native {
     } catch (_) {}
   }
 
-  /// Plays the short opening sound (silent when the phone is on silent or vibrate).
+  /// Plays the short opening sound (media volume, so it is heard in silent mode too).
   static Future<void> playIntro() async {
     try {
       await _ch.invokeMethod('playIntro');

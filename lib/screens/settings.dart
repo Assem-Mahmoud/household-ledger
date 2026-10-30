@@ -54,6 +54,13 @@ class SettingsScreen extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
             ),
+            SwitchListTile(
+              secondary: const Icon(Icons.music_note_outlined),
+              title: const T('Opening sound'),
+              subtitle: const T('A short sound with the opening animation, also in silent mode.'),
+              value: app.settings['introSound'] != '0',
+              onChanged: (v) => app.setSetting('introSound', v ? '1' : '0'),
+            ),
 
             _header(context, 'Bank SMS'),
             SwitchListTile(

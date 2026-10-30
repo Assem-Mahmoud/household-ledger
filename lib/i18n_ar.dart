@@ -767,5 +767,5 @@ const arabic = <String, String>{
   "Which banks do you use?": "ما البنوك التي تستخدمها؟",
   "Pick your banks so only their messages are read. We ticked the ones that look like banks. Not sure? Leave it empty and any message that looks like a bank transaction is read.": "اختر بنوكك لتُقرأ رسائلها فقط. حدّدنا لك ما يبدو أنه بنوك. لست متأكدًا؟ اتركها فارغة وستُقرأ أي رسالة تبدو كعملية بنكية.",
   "Opening sound": "صوت الافتتاح",
-  "A short sound with the opening animation. Quiet when the phone is on silent.": "صوت قصير مع حركة الافتتاح، ولا يعمل عندما يكون الجوال على الصامت.",
+  "A short sound with the opening animation, also in silent mode.": "صوت قصير مع حركة الافتتاح، حتى في الوضع الصامت.",
 };

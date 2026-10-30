@@ -458,10 +458,18 @@ class _ReviewCardState extends State<ReviewCard> {
     final cats = frequentCategories(kind);
     if (categoryId != null && !cats.any((x) => x.id == categoryId)) categoryId = null;
     // the chosen or suggested category first, then the most used ones
-    final chips = <Category>[
-      if (categoryId != null) app.cat(categoryId!)!,
-      ...cats.where((x) => x.id != categoryId).take(categoryId != null ? 3 : 4),
+    // the chosen or suggested category, then the main categories, then the most used ones: 7 tiles + More
+    final main = [
+      for (final n in kind == 'income'
+          ? const ['Salary', 'Housing allowance', 'Bonus', 'Refunds', 'Other income']
+          : const ['Groceries', 'Dining', 'Transport', 'Utilities', 'Shopping', 'Housing', 'Health'])
+        if (app.catByName(n) case final x? when !x.archived && x.kind == kind) x,
     ];
+    final chips = <Category>[
+      if (categoryId != null && app.cat(categoryId!) != null) app.cat(categoryId!)!,
+      ...main.where((x) => x.id != categoryId),
+      ...cats.where((x) => x.id != categoryId && !main.any((m) => m.id == x.id)),
+    ].take(7).toList();
     final acc = app.account(accountId);
     final digits = cardDigitsIn(widget.item.body);
     final hint = app.looksLikeOwnTransfer(widget.item.body)
@@ -520,7 +528,7 @@ class _ReviewCardState extends State<ReviewCard> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-                  Text(fmtAuto(amount), style: TextStyle(fontSize: 40, fontWeight: FontWeight.w700, color: c.text, fontFeatures: tabular)),
+                  Text(fmtAuto(amount), style: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, color: c.text, fontFeatures: tabular)),
                   const SizedBox(width: 6),
                   Text(app.currency, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: c.muted)),
                 ]),
@@ -578,58 +586,70 @@ class _ReviewCardState extends State<ReviewCard> {
                   },
                 ),
             ]),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             TourTarget(id: 'review.cats', child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text(tr('Category'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted)),
-            const SizedBox(height: 8),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              for (final cat in chips)
-                _CategoryChip(cat: cat, selected: cat.id == categoryId, onTap: () => setState(() => categoryId = cat.id)),
-              ActionChip(
-                label: Text(tr('More…')),
-                onPressed: () async {
-                  final id = await pickCategory(context, kind, selected: categoryId);
-                  if (id != null) setState(() => categoryId = id);
-                },
-              ),
-            ]),
+            const SizedBox(height: 6),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              crossAxisCount: 4,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+              childAspectRatio: 1.05,
+              children: [
+                for (final cat in chips)
+                  _CatTile(cat: cat, selected: cat.id == categoryId, onTap: () => setState(() => categoryId = cat.id)),
+                _CatTile(
+                  cat: null,
+                  selected: false,
+                  onTap: () async {
+                    final id = await pickCategory(context, kind, selected: categoryId);
+                    if (id != null) setState(() => categoryId = id);
+                  },
+                ),
+              ],
+            ),
             ])),
             if (app.activeAccounts.length > 1) ...[
-              const SizedBox(height: 12),
-              Text(tr('Paid from'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted)),
-              const SizedBox(height: 6),
-              Wrap(spacing: 6, runSpacing: 6, children: [
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                Text(tr('Paid from'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.muted)),
+                const SizedBox(width: 8),
                 for (final a in app.activeAccounts)
-                  ChoiceChip(
+                  Padding(padding: const EdgeInsetsDirectional.only(end: 6), child: ChoiceChip(
                     visualDensity: VisualDensity.compact,
                     showCheckmark: false,
                     avatar: Icon(accountIcon(a.type), size: 16),
                     label: Text(a.name),
                     selected: accountId == a.id,
                     onSelected: (v) => setState(() => accountId = v ? a.id : null),
-                  ),
-              ]),
+                  )),
+              ])),
             ],
-            const SizedBox(height: 6),
+            const SizedBox(height: 2),
             InkWell(
               onTap: () => setState(() => remember = !remember),
               child: Row(children: [
-                Checkbox(value: remember, onChanged: (v) => setState(() => remember = v ?? true)),
+                Checkbox(visualDensity: VisualDensity.compact, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, value: remember, onChanged: (v) => setState(() => remember = v ?? true)),
                 Expanded(
                   child: Text(
                     merchant.isNotEmpty && categoryId != null
                         ? tr('Always put {m} in {cat}', {'m': merchant, 'cat': app.cat(categoryId!)?.display ?? ''})
                         : tr('Remember for this merchant'),
-                    style: TextStyle(fontSize: 13.5, color: c.text),
+                    style: TextStyle(fontSize: 13, color: c.text),
                   ),
                 ),
               ]),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             TourTarget(id: 'review.actions', child: Row(children: [
               Expanded(
                 child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                   onPressed: () => app.ignoreSms(widget.item),
                   child: const T('Not spending'),
                 ),
@@ -637,7 +657,7 @@ class _ReviewCardState extends State<ReviewCard> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
-                  style: FilledButton.styleFrom(minimumSize: const Size(0, 52), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                   onPressed: _confirm,
                   child: const T('Confirm'),
                 ),
@@ -650,33 +670,44 @@ class _ReviewCardState extends State<ReviewCard> {
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  final Category cat;
+/// Compact category tile for the review card grid (null = More).
+class _CatTile extends StatelessWidget {
+  final Category? cat;
   final bool selected;
   final VoidCallback onTap;
-  const _CategoryChip({required this.cat, required this.selected, required this.onTap});
+  const _CatTile({required this.cat, required this.selected, required this.onTap});
   @override
   Widget build(BuildContext context) {
     final c = lc;
-    final col = categoryColor(cat);
+    final col = cat == null ? c.muted : categoryColor(cat);
     return Material(
       color: selected ? categoryTint(cat) : c.card,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: selected ? col : c.outline, width: selected ? 2 : 1),
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: selected ? col : c.divider, width: selected ? 2 : 1),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(categoryIcon(cat), size: 17, color: col),
-            const SizedBox(width: 6),
-            Text(cat.display, style: TextStyle(fontSize: 14, fontWeight: selected ? FontWeight.w700 : FontWeight.w600, color: c.text)),
+          padding: const EdgeInsets.fromLTRB(3, 6, 3, 4),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(color: cat == null ? c.raised : categoryTint(cat), borderRadius: BorderRadius.circular(10)),
+              child: Icon(cat == null ? Icons.more_horiz : categoryIcon(cat), size: 17, color: col),
+            ),
+            const SizedBox(height: 4),
+            Text(cat?.display ?? tr('More'),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, height: 1.15, fontWeight: selected ? FontWeight.w700 : FontWeight.w600, color: c.text)),
           ]),
         ),
       ),
     );
   }
 }
+
