@@ -1,0 +1,24 @@
+name: Ad voice-over
+on:
+  push:
+    branches: [media-voiceover]
+    paths: ['media/vo/lines.json', 'media/vo/make.py', '.github/workflows/voiceover.yml']
+permissions:
+  contents: write
+jobs:
+  tts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install edge-tts==7.0.2
+      - run: python media/vo/make.py
+      - name: Commit the audio back to this branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add media/vo/out
+          git commit -m "Voice-over audio" || echo "no changes"
+          git push
