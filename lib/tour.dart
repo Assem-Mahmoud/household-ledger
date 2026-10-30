@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'brand.dart' show brandGold;
+import 'lock.dart';
 import 'i18n.dart';
 import 'state.dart';
 import 'theme.dart';
@@ -154,7 +155,7 @@ class Tours {
 
   /// Plays [id] if it hasn't been seen yet (or [force]), once its main element is on screen.
   static Future<void> maybeStart(BuildContext context, String id, {bool force = false}) async {
-    if (running || !app.flag('onboarded')) return;
+    if (running || !app.flag('onboarded') || AppLock.locked.value) return;
     if (!force && (!enabled || seen(id))) return;
     final def = tourDef(id);
     if (def == null) return;

@@ -1440,7 +1440,9 @@ class AppState extends ChangeNotifier {
       'createdAt': DateTime.now().toIso8601String(),
     };
     for (final t in _backupTables) {
-      data[t] = await db.query(t);
+      final rows = await db.query(t);
+      // the app-lock PIN belongs to this phone and never goes into a backup
+      data[t] = t == 'settings' ? rows.where((r) => !const ['lockOn', 'pinHash', 'pinSalt', 'lockBio'].contains(r['key'])).toList() : rows;
     }
     return const JsonEncoder.withIndent(' ').convert(data);
   }
@@ -1562,7 +1564,7 @@ class AppState extends ChangeNotifier {
     if (d['app'] != 'household_ledger') return tr('This file is not a Shahri backup.');
     final keepBackupInfo = {'backupEmail': settings['backupEmail'], 'lastBackup': settings['lastBackup']};
     final thisPhone = {
-      for (final k in ['backupUri', 'backupWhere', 'autoBackup', 'backupFailed']) k: settings[k],
+      for (final k in ['backupUri', 'backupWhere', 'autoBackup', 'backupFailed', 'lockOn', 'pinHash', 'pinSalt', 'lockBio']) k: settings[k],
     };
     await db.transaction((tx) async {
       for (final t in _backupTables) {

@@ -90,6 +90,37 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "biometricAvailable" -> {
+                        val ok = when {
+                            Build.VERSION.SDK_INT >= 30 -> (getSystemService(android.hardware.biometrics.BiometricManager::class.java))
+                                .canAuthenticate(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK) ==
+                                android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS
+                            Build.VERSION.SDK_INT == 29 -> @Suppress("DEPRECATION") (getSystemService(android.hardware.biometrics.BiometricManager::class.java))
+                                .canAuthenticate() == android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS
+                            Build.VERSION.SDK_INT == 28 -> packageManager.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT)
+                            else -> false
+                        }
+                        result.success(ok)
+                    }
+
+                    "authenticate" -> {
+                        if (Build.VERSION.SDK_INT < 28) { result.success(false); return@setMethodCallHandler }
+                        var replied = false
+                        fun reply(v: Boolean) { if (!replied) { replied = true; result.success(v) } }
+                        try {
+                            val prompt = android.hardware.biometrics.BiometricPrompt.Builder(this)
+                                .setTitle(call.argument<String>("title") ?: "")
+                                .setSubtitle(call.argument<String>("subtitle") ?: "")
+                                .setNegativeButton(call.argument<String>("cancel") ?: "Cancel", mainExecutor) { _, _ -> reply(false) }
+                                .build()
+                            prompt.authenticate(android.os.CancellationSignal(), mainExecutor,
+                                object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+                                    override fun onAuthenticationSucceeded(r: android.hardware.biometrics.BiometricPrompt.AuthenticationResult?) = reply(true)
+                                    override fun onAuthenticationError(code: Int, msg: CharSequence?) = reply(false)
+                                })
+                        } catch (e: Exception) { reply(false) }
+                    }
+
                     "playIntro" -> {
                         // the short opening sound; plays on the media stream, so it is heard even in silent mode
                         try {

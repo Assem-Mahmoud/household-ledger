@@ -8,6 +8,7 @@ import '../widgets.dart';
 import '../theme.dart';
 import '../tour.dart';
 import 'help.dart';
+import '../lock.dart';
 import 'settings.dart' show BackupScreen, SettingsScreen, rescanAfterChange;
 
 /// Your name, how your money month works, and the accounts and cards you spend from.
@@ -133,6 +134,7 @@ class ProfileScreen extends StatelessWidget {
                   },
                 ),
               ),
+              ...appLockTiles(context),
               SwitchListTile(
                 secondary: const Icon(Icons.music_note_outlined),
                 title: const T('Opening sound'),

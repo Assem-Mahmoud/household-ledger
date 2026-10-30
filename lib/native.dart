@@ -91,6 +91,24 @@ class Native {
     } catch (_) {}
   }
 
+  /// Whether the phone has a fingerprint / face unlock set up.
+  static Future<bool> biometricAvailable() async {
+    try {
+      return await _ch.invokeMethod<bool>('biometricAvailable') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Shows Android's fingerprint / face prompt. True when the user was recognised.
+  static Future<bool> authenticate({required String title, required String subtitle, required String cancel}) async {
+    try {
+      return await _ch.invokeMethod<bool>('authenticate', {'title': title, 'subtitle': subtitle, 'cancel': cancel}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Plays the short opening sound (media volume, so it is heard in silent mode too).
   static Future<void> playIntro() async {
     try {

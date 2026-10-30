@@ -9,6 +9,7 @@ import '../periods.dart';
 import '../sms_parser.dart';
 import '../state.dart';
 import '../theme.dart';
+import '../lock.dart';
 import '../widgets.dart';
 import 'teach.dart';
 import 'profile.dart';
@@ -61,6 +62,9 @@ class SettingsScreen extends StatelessWidget {
               value: app.settings['introSound'] != '0',
               onChanged: (v) => app.setSetting('introSound', v ? '1' : '0'),
             ),
+
+            _header(context, 'Security'),
+            ...appLockTiles(context),
 
             _header(context, 'Bank SMS'),
             SwitchListTile(

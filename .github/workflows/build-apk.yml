@@ -89,6 +89,9 @@ jobs:
           mkdir -p sig && cd sig && unzip -o -q ../build/app/outputs/flutter-apk/app-release.apk 'META-INF/*.RSA'
           fp=$(openssl pkcs7 -inform DER -in META-INF/*.RSA -print_certs | openssl x509 -noout -fingerprint -sha256 | cut -d= -f2)
           echo "Signed with: $fp"
+          sha1=$(openssl pkcs7 -inform DER -in META-INF/*.RSA -print_certs | openssl x509 -noout -fingerprint -sha1 | cut -d= -f2)
+          printf 'Signing certificate (for Firebase / Google sign-in)\n\n- SHA-1: `%s`\n- SHA-256: `%s`\n- Package: `com.assem.household_ledger`\n' "$sha1" "$fp" > ../release-notes.md
+          cat ../release-notes.md
           expected="62:32:10:88:AD:57:EE:AA:1F:D3:EC:6A:AE:0C:24:2D:20:92:59:47:6B:D4:42:DC:9B:99:7A:22:9B:28:D4:A7"
           if [ "$HAS_KEY" = "true" ] && [ "$fp" != "$expected" ]; then
             echo "::error::APK is not signed with the permanent key"; exit 1
@@ -106,3 +109,4 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Shahri build ${{ github.run_number }}
           files: build/app/outputs/flutter-apk/app-release.apk
+          body_path: release-notes.md
