@@ -26,7 +26,9 @@ class TourDef {
 /// All tours. Built on demand so the texts follow the current language.
 List<TourDef> tourDefs() => [
       TourDef('home', tr('Home'), Icons.home_outlined, 'home.hero', [
-        TourStep('home.hero', tr('Left to spend this month'), tr('Your budget minus what you spent so far. It turns red if you go over.'), radius: 24),
+        app.totalBudget(app.period) > 0
+            ? TourStep('home.hero', tr('Left to spend this month'), tr('Your budget minus what you spent so far. It turns red if you go over.'), radius: 24)
+            : TourStep('home.hero', tr('Spent this month'), tr('What you spent so far this month. Set a budget in Plan and this shows what\'s left to spend.'), radius: 24),
         TourStep('home.strip', tr('New bank messages'), tr('Bank SMS land here. Tap to review them in a few seconds.'), radius: 18),
         TourStep('home.where', tr('Where your money went'), tr('Each category against its budget. Tap See all for the full picture.')),
         TourStep('home.coming', tr('Coming up'), tr('Bills and yearly expenses that are due soon, so nothing surprises you.')),
@@ -188,6 +190,7 @@ class TourButton extends StatelessWidget {
         inset: const EdgeInsets.all(4),
         child: IconButton(
           tooltip: tr('Page tour'),
+          visualDensity: VisualDensity.compact,
           icon: Icon(Icons.info_outline, color: lc.primary),
           onPressed: () => Tours.maybeStart(context, tour, force: true),
         ),
@@ -374,7 +377,7 @@ class _TourOverlayState extends State<_TourOverlay> with TickerProviderStateMixi
           FilledButton(
             style: FilledButton.styleFrom(minimumSize: const Size(0, 38), padding: const EdgeInsets.symmetric(horizontal: 18)),
             onPressed: _next,
-            child: Text(tr(last ? 'Got it' : 'Next')),
+            child: Text(last ? tr('Got it') : tr('Next')),
           ),
         ]),
       ]),

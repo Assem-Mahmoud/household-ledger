@@ -750,4 +750,7 @@ const arabic = <String, String>{
   "Replay all tours": "إعادة كل الجولات",
   "Each page will show its tour again the next time you open it.": "ستعرض كل صفحة جولتها مرة أخرى عند فتحها.",
   "Handy before handing the phone to someone new": "مفيد قبل تسليم الجوال لشخص جديد",
+  "Next": "التالي",
+  "Got it": "فهمت",
+  "What you spent so far this month. Set a budget in Plan and this shows what's left to spend.": "ما صرفته حتى الآن هذا الشهر. حدّد ميزانية من الخطة ليظهر هنا المتبقي للصرف.",
 };

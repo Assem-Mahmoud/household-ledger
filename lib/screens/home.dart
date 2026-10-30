@@ -55,17 +55,17 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   // header: avatar, greeting, month, settings
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 4, 10),
                     child: Row(children: [
                       InkWell(
                         customBorder: const CircleBorder(),
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
-                        child: Semantics(label: tr('Profile'), button: true, child: const Avatar()),
+                        child: Semantics(label: tr('Profile'), button: true, child: const Avatar(size: 40)),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(_greeting(), style: TextStyle(fontSize: 13, color: c.muted)),
+                          Text(_greeting(), maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: c.muted)),
                           Text(app.userName.isEmpty ? tr('Shahri') : app.userName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -75,6 +75,7 @@ class HomeScreen extends StatelessWidget {
                       const TourButton(tour: 'home', target: 'info.home'),
                       const PeriodSwitcher(),
                       IconButton(
+                        visualDensity: VisualDensity.compact,
                         tooltip: tr('Settings'),
                         icon: Icon(Icons.settings_outlined, color: c.text),
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
