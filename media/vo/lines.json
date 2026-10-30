@@ -1,14 +1,11 @@
 [
- ["l1", "كل شهر تسأل نفسك نفس السؤال: راتبي راح فين؟"],
- ["l2", "رسائل البنك كثيرة، والمصاريف أكثر."],
- ["l3", "وفي آخر الشهر، لا تعرف كم صرفت، ولا على ماذا، ولا ما هو أكثر شيء يأخذ من راتبك."],
- ["l4", "مع شَهْرِي، كل هذا له حل."],
- ["l5", "شَهْرِي يقرأ رسائل البنك تلقائيًا، وأنت فقط تؤكد بلمسة."],
- ["l6", "وترى أين تذهب مصاريفك بالضبط، أولًا بأول."],
- ["l7", "حتى المصاريف السنوية، مثل المدارس والتأمين، شَهْرِي يخبرك كم تدّخر كل شهر."],
- ["l8", "وبياناتك على هاتفك أنت فقط، بالعربي والإنجليزي، وبعملة بلدك."],
- ["l9", "شَهْرِي… شهرك تحت السيطرة. جرّبه الآن!"],
- ["n1", "شَهْرِي"],
- ["n2", "شَهْري"],
- ["n3", "شَهْرِيْ"]
+ ["l1", "Every month, the same question: where did my salary go?"],
+ ["l2", "So many bank messages. Even more expenses."],
+ ["l3", "And at the end of the month, you don't know how much you spent, on what, or what takes most of your salary."],
+ ["l4", "With Shahree, all of that is solved."],
+ ["l5", "Shahree reads your bank messages automatically. You just confirm with a tap."],
+ ["l6", "See exactly where your money goes, as it happens."],
+ ["l7", "Even yearly expenses, like school fees and insurance. Shahree tells you how much to save each month."],
+ ["l8", "Your data stays on your phone. In English and Arabic, in your own currency."],
+ ["l9", "Shahree. Your month, under control. Try it now!"]
 ]
