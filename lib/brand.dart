@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 
 import 'brand_paths.dart';
 import 'i18n.dart';
+import 'native.dart';
+import 'state.dart';
 import 'theme.dart';
 
 const brandGold = Color(0xFFE8912D);
@@ -314,6 +316,7 @@ class _ShahriIntroState extends State<ShahriIntro> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
+    if (app.settings['introSound'] != '0') Native.playIntro();
     c.forward().whenComplete(() => Future.delayed(const Duration(milliseconds: 1300), () {
           if (mounted) widget.onDone();
         }));

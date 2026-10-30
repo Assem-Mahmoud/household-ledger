@@ -91,6 +91,13 @@ class Native {
     } catch (_) {}
   }
 
+  /// Plays the short opening sound (silent when the phone is on silent or vibrate).
+  static Future<void> playIntro() async {
+    try {
+      await _ch.invokeMethod('playIntro');
+    } catch (_) {}
+  }
+
   /// Language for notifications raised by Android itself (daily reminder, new SMS): 'en' or 'ar'.
   static Future<void> setLang(String lang) async {
     try {

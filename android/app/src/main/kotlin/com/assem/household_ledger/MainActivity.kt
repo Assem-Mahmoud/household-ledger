@@ -90,6 +90,29 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "playIntro" -> {
+                        // the short opening sound; stays quiet when the phone is on silent or vibrate
+                        try {
+                            val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                            if (am.ringerMode == android.media.AudioManager.RINGER_MODE_NORMAL) {
+                                val mp = android.media.MediaPlayer()
+                                mp.setAudioAttributes(
+                                    android.media.AudioAttributes.Builder()
+                                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                        .build()
+                                )
+                                val afd = resources.openRawResourceFd(R.raw.shahri_intro)
+                                mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                                afd.close()
+                                mp.setOnCompletionListener { it.release() }
+                                mp.setOnPreparedListener { it.start() }
+                                mp.prepareAsync()
+                            }
+                        } catch (e: Exception) { }
+                        result.success(null)
+                    }
+
                     "setLang" -> {
                         getSharedPreferences(Reminder.PREFS, Context.MODE_PRIVATE)
                             .edit().putString("lang", call.argument<String>("lang") ?: "en").apply()

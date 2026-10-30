@@ -23,6 +23,21 @@ class ReviewScreen extends StatefulWidget {
 
 class _ReviewScreenState extends State<ReviewScreen> {
   int? focusedId;
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Brings an item from "Up next" into the review card at the top and scrolls up to it.
+  void _open(int id) {
+    setState(() => focusedId = id);
+    if (_scroll.hasClients && _scroll.offset > 0) {
+      _scroll.animateTo(0, duration: const Duration(milliseconds: 420), curve: Curves.easeOutCubic);
+    }
+  }
 
   Future<void> _scan() async {
     final msg = await app.scanSms();
@@ -54,6 +69,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         return RefreshIndicator(
           onRefresh: _scan,
           child: ListView(
+            controller: _scroll,
             cacheExtent: 3000,
             padding: const EdgeInsets.only(bottom: 24),
             children: [
@@ -163,7 +179,21 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   ),
                 ),
               ] else ...[
-                TourTarget(id: 'review.card', inset: const EdgeInsets.fromLTRB(16, 4, 16, 4), child: ReviewCard(key: ValueKey(focused.id), item: focused)),
+                TourTarget(
+                  id: 'review.card',
+                  inset: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 320),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, a) => FadeTransition(
+                      opacity: a,
+                      child: ScaleTransition(scale: Tween(begin: .96, end: 1.0).animate(a), child: child),
+                    ),
+                    layoutBuilder: (cur, prev) => Stack(alignment: Alignment.topCenter, children: [...prev, if (cur != null) cur]),
+                    child: ReviewCard(key: ValueKey(focused.id), item: focused),
+                  ),
+                ),
                 if (rest.isNotEmpty || suggested > 1)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 12, 4),
@@ -197,7 +227,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     child: Column(children: [
                       for (final it in rest)
                         InkWell(
-                          onTap: () => setState(() => focusedId = it.id),
+                          onTap: () => _open(it.id),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             child: Row(children: [
@@ -217,6 +247,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
                               ),
                               Text(ltr('${it.kind == 'income' ? '+' : '−'}${fmtAuto(it.amount)}'),
                                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, fontFeatures: tabular)),
+                              const SizedBox(width: 10),
+                              Material(
+                                color: c.primarySoft,
+                                borderRadius: BorderRadius.circular(14),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(14),
+                                  onTap: () => _open(it.id),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                    child: Text(tr('Review'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.onPrimarySoft)),
+                                  ),
+                                ),
+                              ),
                             ]),
                           ),
                         ),
