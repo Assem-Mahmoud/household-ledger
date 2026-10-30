@@ -9,12 +9,12 @@ def say(*a):
 async def edge():
     import edge_tts
     ok = 0
-    for v in ["ar-SA-HamedNeural", "ar-SA-ZariyahNeural", "ar-JO-TaimNeural", "ar-EG-SalmaNeural"]:
+    for v in ["ar-EG-ShakirNeural", "ar-SA-HamedNeural"]:
         try:
-            os.makedirs(f"media/vo/out/{v}", exist_ok=True)
+            os.makedirs(f"media/vo/out/colloquial/{v}", exist_ok=True)
             for key, text in lines:
-                c = edge_tts.Communicate(text, v, rate="-6%")
-                await c.save(f"media/vo/out/{v}/{key}.mp3")
+                c = edge_tts.Communicate(text, v, rate="-3%")
+                await c.save(f"media/vo/out/colloquial/{v}/{key}.mp3")
             say("edge ok", v); ok += 1
         except Exception:
             say("edge failed", v, traceback.format_exc())
@@ -37,8 +37,4 @@ try:
     n = asyncio.run(edge())
 except Exception:
     say("edge import/run failed", traceback.format_exc())
-try:
-    piper()
-except Exception:
-    say("piper failed", traceback.format_exc())
 log.close()
