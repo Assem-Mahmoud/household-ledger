@@ -437,8 +437,8 @@ class _CloudCard extends StatelessWidget {
     }
     if (app.txns.isEmpty) {
       // nothing on this phone yet: bring the cloud copy straight back
-      final msg = await Cloud.restore();
-      m.showSnackBar(SnackBar(content: Text(msg.isEmpty ? tr('Welcome back. Your data was restored from the cloud.') : msg)));
+      final err = await Cloud.restore();
+      m.showSnackBar(SnackBar(content: Text(err ?? tr('Welcome back. Your data was restored from the cloud.'))));
       return;
     }
     // both have data: let the user choose
@@ -456,8 +456,8 @@ class _CloudCard extends StatelessWidget {
       ),
     );
     if (choice == 'cloud') {
-      final msg = await Cloud.restore();
-      m.showSnackBar(SnackBar(content: Text(msg.isEmpty ? tr('Restored from the cloud.') : msg)));
+      final err = await Cloud.restore();
+      m.showSnackBar(SnackBar(content: Text(err ?? tr('Restored from the cloud.'))));
     } else {
       final ok = await Cloud.backup();
       m.showSnackBar(SnackBar(content: Text(tr(ok ? 'Backed up to the cloud.' : 'Cloud backup failed. Check your internet connection.'))));
@@ -518,8 +518,8 @@ class _CloudCard extends StatelessWidget {
       ),
     );
     if (go != true) return;
-    final msg = await Cloud.restore();
-    m.showSnackBar(SnackBar(content: Text(msg.isEmpty ? tr('Restored from the cloud.') : msg)));
+    final err = await Cloud.restore();
+    m.showSnackBar(SnackBar(content: Text(err ?? tr('Restored from the cloud.'))));
   }
 
   @override

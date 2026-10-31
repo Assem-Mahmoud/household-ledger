@@ -822,4 +822,5 @@ const arabic = <String, String>{
   "or continue without signing in": "أو تابع دون تسجيل الدخول",
   "Continue without signing in": "المتابعة دون تسجيل الدخول",
   "I have a backup file": "لدي ملف نسخة احتياطية",
+  "Your data is back. One more step on this phone: allow reading your bank SMS.": "عادت بياناتك. بقيت خطوة واحدة على هذا الجوال: السماح بقراءة رسائل البنك.",
 };

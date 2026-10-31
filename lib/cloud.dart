@@ -105,8 +105,8 @@ class Cloud {
     }
   }
 
-  /// Replaces the app's data with the cloud copy. Returns a message (empty on success).
-  static Future<String> restore() async {
+  /// Replaces the app's data with the cloud copy. Returns null on success, otherwise what went wrong.
+  static Future<String?> restore() async {
     if (!ready || !signedIn) return 'Not signed in.';
     busy.value = true;
     try {
@@ -118,8 +118,10 @@ class Cloud {
         sb.write((await _meta.collection('backup').doc('part$i').get()).data()?['data'] ?? '');
       }
       final json = utf8.decode(GZipCodec().decode(base64Decode(sb.toString())));
-      final msg = await app.restoreBackup(json);
-      return msg;
+      final d = jsonDecode(json);
+      if (d is! Map || d['app'] != 'household_ledger') return 'The cloud copy could not be read.';
+      await app.restoreBackup(json);
+      return null;
     } catch (e) {
       return '$e';
     } finally {

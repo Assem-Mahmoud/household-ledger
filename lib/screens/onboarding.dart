@@ -22,7 +22,13 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  List<Widget Function(BuildContext)> get _pages => [_language, _disclosure, if (smsAllowed) _banks, _month, _categories, _start];
+  /// After restoring a backup (Google or file) only the phone-specific steps remain: SMS permission and banks.
+  /// Static, so it survives the rebuild when the restored backup switches the language.
+  static bool _restored = false;
+  bool restored = false;
+  List<Widget Function(BuildContext)> get _pages => restored
+      ? [_language, _disclosure, if (smsAllowed) _banks]
+      : [_language, _disclosure, if (smsAllowed) _banks, _month, _categories, _start];
   int get _steps => _pages.length;
   final Set<String> banks = {};
   int step = 0;
@@ -43,6 +49,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void initState() {
     super.initState();
     off = app.categories.where((c) => c.archived).map((c) => c.id).toSet();
+    if (_restored) {
+      restored = true;
+      step = 1;
+      banks.addAll(app.lines('senders'));
+    }
     if (app.txns.isEmpty) {
       // fresh install: start with the less common categories switched off
       for (final n in const ['Education', 'Travel', 'Consulting / freelance']) {
@@ -83,7 +94,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SnackBar(content: T('SMS access was not granted. You can turn it on later in Settings.')));
     }
     setState(() => busy = false);
-    _next();
+    if (restored && !smsAllowed) {
+      await _finishRestored();
+    } else {
+      _next();
+    }
+  }
+
+  void _enterRestored() {
+    _restored = true;
+    if (!mounted) return; // the language switch rebuilt setup; the new screen picks it up
+    setState(() {
+      restored = true;
+      step = 1;
+      _dir = 1;
+      banks
+        ..clear()
+        ..addAll(app.lines('senders'));
+    });
+  }
+
+  /// Ends setup after a restore: keeps the restored settings, only adds what belongs to this phone.
+  Future<void> _finishRestored() async {
+    setState(() => busy = true);
+    await app.setSetting('smsOn', smsAllowed ? '1' : '0', notify: false);
+    if (smsAllowed) await app.setSetting('senders', banks.join('\n'), notify: false);
+    _restored = false;
+    app.setupRestore = false;
+    await app.setSetting('onboarded', '1');
+    await app.applyReminder();
+    app.goToday();
+    if (smsAllowed) app.openActivity(0);
+    widget.onDone();
   }
 
   Future<void> _finish() async {
@@ -118,10 +160,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _restore() async {
+    app.setupRestore = true;
     await restoreBackupFlow(context);
-    if (app.txns.isNotEmpty || app.flag('onboarded')) {
-      await app.setSetting('onboarded', '1');
-      widget.onDone();
+    if (app.txns.isNotEmpty) {
+      _enterRestored();
+    } else {
+      app.setupRestore = false;
     }
   }
 
@@ -203,8 +247,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       const SizedBox(width: 10),
       Expanded(
         child: _primary(
-          last ? tr(smsAllowed && start != 'today' ? 'Start reviewing' : 'Go to Home') : tr('Continue'),
-          last ? _finish : _next,
+          last ? (restored ? tr('Go to Home') : tr(smsAllowed && start != 'today' ? 'Start reviewing' : 'Go to Home')) : tr('Continue'),
+          last ? (restored ? _finishRestored : _finish) : _next,
         ),
       ),
     ]);
@@ -325,7 +369,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           controller: nameCtl,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
-          onChanged: (_) => setState(() {}),
+          // saved as you type, so switching the language doesn't lose it
+          onChanged: (v) {
+            app.setSetting('userName', v.trim(), notify: false);
+            setState(() {});
+          },
           onSubmitted: (_) => _withoutAccount(),
           decoration: InputDecoration(
             labelText: tr('Your name'),
@@ -367,14 +415,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return;
       }
       if (await Cloud.info() != null) {
-        final msg = await Cloud.restore();
-        if (msg.isNotEmpty) {
-          m.showSnackBar(SnackBar(content: Text(msg)));
+        app.setupRestore = true;
+        _restored = true; // set first: the restore may switch the language and rebuild this screen
+        final err = await Cloud.restore();
+        if (err != null) {
+          _restored = false;
+          app.setupRestore = false;
+          if (mounted) m.showSnackBar(SnackBar(content: Text(err)));
           return;
         }
-        await app.setSetting('onboarded', '1');
-        m.showSnackBar(SnackBar(content: Text(tr('Welcome back. Your data was restored from the cloud.'))));
-        widget.onDone();
+        if (mounted) m.showSnackBar(SnackBar(content: Text(tr('Welcome back. Your data was restored from the cloud.'))));
+        _enterRestored();
         return;
       }
       final name = nameCtl.text.trim().isNotEmpty ? nameCtl.text.trim() : Cloud.name;
@@ -406,6 +457,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ]),
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (restored)
+        Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(color: lc.primarySoft, borderRadius: BorderRadius.circular(14)),
+          child: Row(children: [
+            Icon(Icons.check_circle, color: lc.onPrimarySoft),
+            const SizedBox(width: 10),
+            Expanded(
+              child: T('Your data is back. One more step on this phone: allow reading your bank SMS.',
+                  style: TextStyle(fontSize: 13.5, height: 1.35, fontWeight: FontWeight.w600, color: lc.onPrimarySoft)),
+            ),
+          ]),
+        ),
       const SmsDemo(),
       const SizedBox(height: 18),
       _title(context, 'Capture spending from your bank SMS',

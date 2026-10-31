@@ -1300,6 +1300,9 @@ class AppState extends ChangeNotifier {
 
   String get userName => settings['userName']?.trim() ?? '';
 
+  /// True while first-run setup restores a backup: setup itself decides when it is finished.
+  bool setupRestore = false;
+
   // ------------------------------------------------------ yearly expenses
 
   List<Fund> funds = [];
@@ -1589,7 +1592,7 @@ class AppState extends ChangeNotifier {
     for (final e in thisPhone.entries) {
       await setSetting(e.key, e.value ?? '', notify: false);
     }
-    await setSetting('onboarded', '1', notify: false);
+    if (!setupRestore) await setSetting('onboarded', '1', notify: false);
     await _loadCategories();
     await _loadTxns();
     await _loadOverrides();
