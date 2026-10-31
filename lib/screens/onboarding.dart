@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Category;
 
 import '../brand.dart';
+import '../cloud.dart';
 import '../format.dart';
 import '../i18n.dart';
 import '../models.dart';
@@ -114,6 +115,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     widget.onDone();
   }
 
+  Future<void> _cloudRestore() async {
+    final m = ScaffoldMessenger.of(context);
+    setState(() => busy = true);
+    try {
+      final err = await Cloud.signIn();
+      if (err != null) {
+        if (err.isNotEmpty) m.showSnackBar(SnackBar(content: Text(tr('Could not sign in: {e}', {'e': err}))));
+        return;
+      }
+      if (await Cloud.info() == null) {
+        m.showSnackBar(SnackBar(content: Text(tr('Signed in. There is no cloud copy yet, so let\'s set up the app.'))));
+        return;
+      }
+      final msg = await Cloud.restore();
+      if (msg.isNotEmpty) {
+        m.showSnackBar(SnackBar(content: Text(msg)));
+        return;
+      }
+      await app.setSetting('onboarded', '1');
+      widget.onDone();
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> _restore() async {
     await restoreBackupFlow(context);
     if (app.txns.isNotEmpty || app.flag('onboarded')) {
@@ -182,6 +208,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _primary(tr('Get started'), _next),
         const SizedBox(height: 6),
         TextButton(onPressed: busy ? null : _restore, child: const T('I have a backup — restore it')),
+        if (Cloud.ready)
+          TextButton.icon(
+            onPressed: busy ? null : _cloudRestore,
+            icon: const Icon(Icons.cloud_download_outlined, size: 18),
+            label: const T('Restore from my Google account'),
+          ),
       ]);
     }
     if (step == 1) {

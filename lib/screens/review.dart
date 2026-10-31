@@ -384,6 +384,8 @@ class _ReviewCardState extends State<ReviewCard> {
   bool remember = true;
   bool showRaw = false;
   late DateTime date;
+  List<int> _tileIds = [];
+  String _tileKind = '';
   final noteCtl = TextEditingController();
 
   @override
@@ -465,11 +467,19 @@ class _ReviewCardState extends State<ReviewCard> {
           : const ['Groceries', 'Dining', 'Transport', 'Utilities', 'Shopping', 'Housing', 'Health'])
         if (app.catByName(n) case final x? when !x.archived && x.kind == kind) x,
     ];
-    final chips = <Category>[
-      if (categoryId != null && app.cat(categoryId!) != null) app.cat(categoryId!)!,
-      ...main.where((x) => x.id != categoryId),
-      ...cats.where((x) => x.id != categoryId && !main.any((m) => m.id == x.id)),
-    ].take(7).toList();
+    // The tile order is fixed when the message is shown (or the kind changes), so tapping a tile only
+    // highlights it. A category picked from More takes the last tile.
+    if (_tileKind != kind || _tileIds.isEmpty) {
+      final seed = kind == widget.item.kind ? widget.item.categoryId : null;
+      _tileIds = <Category>[
+        if (seed != null && app.cat(seed) != null) app.cat(seed)!,
+        ...main.where((x) => x.id != seed),
+        ...cats.where((x) => x.id != seed && !main.any((m) => m.id == x.id)),
+      ].take(7).map((x) => x.id).toList();
+      _tileKind = kind;
+    }
+    if (categoryId != null && !_tileIds.contains(categoryId) && _tileIds.isNotEmpty) _tileIds[_tileIds.length - 1] = categoryId!;
+    final chips = [for (final id in _tileIds) if (app.cat(id) case final x?) x];
     final acc = app.account(accountId);
     final digits = cardDigitsIn(widget.item.body);
     final hint = app.looksLikeOwnTransfer(widget.item.body)

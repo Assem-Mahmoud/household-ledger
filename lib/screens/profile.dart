@@ -424,17 +424,77 @@ class _CloudCard extends StatelessWidget {
   Future<void> _signIn(BuildContext context) async {
     final m = ScaffoldMessenger.of(context);
     final err = await Cloud.signIn();
-    if (err == null) {
-      final info = await Cloud.info();
-      if (info != null && info.$2 > 0 && app.txns.isEmpty && context.mounted) {
-        await _restore(context, ask: true);
-      } else {
-        final ok = await Cloud.backup();
-        m.showSnackBar(SnackBar(content: Text(tr(ok ? 'Signed in. Your data is backed up to the cloud.' : 'Signed in.'))));
-      }
-    } else if (err.isNotEmpty) {
-      m.showSnackBar(SnackBar(content: Text(tr('Could not sign in: {e}', {'e': err}))));
+    if (err != null) {
+      if (err.isNotEmpty) m.showSnackBar(SnackBar(content: Text(tr('Could not sign in: {e}', {'e': err}))));
+      return;
     }
+    final info = await Cloud.info();
+    if (!context.mounted) return;
+    if (info == null) {
+      final ok = await Cloud.backup();
+      m.showSnackBar(SnackBar(content: Text(tr(ok ? 'Signed in. Your data is backed up to the cloud.' : 'Signed in.'))));
+      return;
+    }
+    if (app.txns.isEmpty) {
+      // nothing on this phone yet: bring the cloud copy straight back
+      final msg = await Cloud.restore();
+      m.showSnackBar(SnackBar(content: Text(msg.isEmpty ? tr('Welcome back. Your data was restored from the cloud.') : msg)));
+      return;
+    }
+    // both have data: let the user choose
+    final choice = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (d) => AlertDialog(
+        title: const T('You have data in both places'),
+        content: Text(tr('Your cloud copy from {d} has {n} entries. This phone has {p} entries. Which one do you want to keep?',
+            {'d': info.$1 == null ? '—' : shortDate(info.$1!), 'n': info.$2, 'p': app.txns.length})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, 'cloud'), child: const T('Use my cloud copy')),
+          FilledButton(onPressed: () => Navigator.pop(d, 'phone'), child: const T('Keep this phone\'s data')),
+        ],
+      ),
+    );
+    if (choice == 'cloud') {
+      final msg = await Cloud.restore();
+      m.showSnackBar(SnackBar(content: Text(msg.isEmpty ? tr('Restored from the cloud.') : msg)));
+    } else {
+      final ok = await Cloud.backup();
+      m.showSnackBar(SnackBar(content: Text(tr(ok ? 'Backed up to the cloud.' : 'Cloud backup failed. Check your internet connection.'))));
+    }
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    final m = ScaffoldMessenger.of(context);
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const T('Sign out'),
+        content: const T('Do you want to keep your data on this phone? Your cloud copy stays in your Google account either way.'),
+        actionsOverflowDirection: VerticalDirection.down,
+        actionsOverflowButtonSpacing: 4,
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: const T('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(d, 'keep'), child: const T('Keep data on this phone')),
+          FilledButton(onPressed: () => Navigator.pop(d, 'remove'), child: const T('Remove data from this phone')),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    if (choice == 'remove') {
+      // never wipe without a fresh cloud copy
+      final ok = await Cloud.backup();
+      if (!ok) {
+        m.showSnackBar(SnackBar(content: Text(tr('Could not back up to the cloud, so nothing was removed. Check your internet connection and try again.'))));
+        return;
+      }
+      await Cloud.signOut();
+      if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+      await app.resetApp();
+      return;
+    }
+    await Cloud.signOut();
+    m.showSnackBar(SnackBar(content: Text(tr('Signed out. Your data stays on this phone.'))));
   }
 
   Future<void> _restore(BuildContext context, {bool ask = true}) async {
@@ -548,7 +608,7 @@ class _CloudCard extends StatelessWidget {
                     ]),
                     Align(
                       alignment: AlignmentDirectional.centerEnd,
-                      child: TextButton(onPressed: busy ? null : Cloud.signOut, child: const T('Sign out')),
+                      child: TextButton(onPressed: busy ? null : () => _signOut(context), child: const T('Sign out')),
                     ),
                   ]),
           );
