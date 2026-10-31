@@ -1446,7 +1446,10 @@ class AppState extends ChangeNotifier {
       if (forCloud && t == 'sms_inbox') continue; // raw SMS texts never leave the phone
       final rows = await db.query(t);
       // the app-lock PIN belongs to this phone and never goes into a backup
-      data[t] = t == 'settings' ? rows.where((r) => !const ['lockOn', 'pinHash', 'pinSalt', 'lockBio'].contains(r['key'])).toList() : rows;
+      data[t] = t == 'settings'
+          ? rows.where((r) => !const ['lockOn', 'pinHash', 'pinSalt', 'lockBio'].contains(r['key']) &&
+              !(forCloud && const ['cloudBackupAt', 'cloudHash', 'lastBackup', 'backupFailed', 'backupUri', 'backupWhere'].contains(r['key']))).toList()
+          : rows;
     }
     return const JsonEncoder.withIndent(' ').convert(data);
   }
@@ -1568,7 +1571,7 @@ class AppState extends ChangeNotifier {
     if (d['app'] != 'household_ledger') return tr('This file is not a Shahri backup.');
     final keepBackupInfo = {'backupEmail': settings['backupEmail'], 'lastBackup': settings['lastBackup']};
     final thisPhone = {
-      for (final k in ['backupUri', 'backupWhere', 'autoBackup', 'backupFailed', 'lockOn', 'pinHash', 'pinSalt', 'lockBio', 'cloudBackupAt']) k: settings[k],
+      for (final k in ['backupUri', 'backupWhere', 'autoBackup', 'backupFailed', 'lockOn', 'pinHash', 'pinSalt', 'lockBio', 'cloudBackupAt', 'cloudHash']) k: settings[k],
     };
     await db.transaction((tx) async {
       for (final t in _backupTables) {

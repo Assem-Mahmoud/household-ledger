@@ -125,6 +125,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await app.applyReminder();
     app.goToday();
     if (smsAllowed) app.openActivity(0);
+    Cloud.saveIfChanged();
     widget.onDone();
   }
 
@@ -156,6 +157,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await app.applyReminder();
     app.goToday();
     if (smsAllowed && start != 'today') app.openActivity(0);
+    Cloud.saveIfChanged(); // signed in with Google: the setup choices are saved right away
     widget.onDone();
   }
 

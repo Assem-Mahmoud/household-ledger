@@ -82,7 +82,10 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) AppLock.wentAway();
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      AppLock.wentAway();
+      Cloud.saveIfChanged(); // keep the cloud copy current whenever the app is left
+    }
     if (state == AppLifecycleState.resumed) AppLock.cameBack();
   }
 

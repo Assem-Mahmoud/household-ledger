@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -63,12 +64,17 @@ class Cloud {
 
   static const _chunk = 700000; // characters per Firestore document (limit is 1 MiB)
 
+  /// The backup without its timestamp, to tell whether anything changed since the last upload.
+  static String _fingerprint(String json) =>
+      sha256.convert(utf8.encode(json.replaceFirst(RegExp(r'"createdAt": "[^"]*"'), ''))).toString();
+
   /// Uploads a fresh cloud copy. Returns true on success.
   static Future<bool> backup() async {
     if (!ready || !signedIn) return false;
     busy.value = true;
     try {
       final json = await app.backupJson(forCloud: true);
+      final fp = _fingerprint(json);
       final packed = base64Encode(GZipCodec().encode(utf8.encode(json)));
       final parts = <String>[for (var i = 0; i < packed.length; i += _chunk) packed.substring(i, i + _chunk > packed.length ? packed.length : i + _chunk)];
       final fs = FirebaseFirestore.instance;
@@ -83,6 +89,7 @@ class Cloud {
         'app': 'shahri',
       });
       await batch.commit();
+      await app.setSetting('cloudHash', fp, notify: false);
       await app.setSetting('cloudBackupAt', '${DateTime.now().millisecondsSinceEpoch}');
       return true;
     } catch (_) {
@@ -129,11 +136,22 @@ class Cloud {
     }
   }
 
-  /// Daily cloud copy, run when the app opens.
-  static Future<void> autoBackupIfDue() async {
-    if (!ready || !signedIn || app.txns.isEmpty) return;
-    final ms = int.tryParse(app.settings['cloudBackupAt'] ?? '');
-    if (ms != null && DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ms)).inHours < 20) return;
-    await backup();
+  static bool _saving = false;
+
+  /// Saves the cloud copy when anything changed since the last upload (entries, settings, budgets…).
+  /// Runs when the app opens, when it goes to the background and when setup ends. Only after setup,
+  /// so a phone that is being set up never overwrites the copy it may restore from.
+  static Future<void> saveIfChanged() async {
+    if (!ready || !signedIn || _saving || !app.flag('onboarded') || app.setupRestore) return;
+    _saving = true;
+    try {
+      final fp = _fingerprint(await app.backupJson(forCloud: true));
+      if (fp != app.settings['cloudHash']) await backup();
+    } catch (_) {
+    } finally {
+      _saving = false;
+    }
   }
+
+  static Future<void> autoBackupIfDue() => saveIfChanged();
 }

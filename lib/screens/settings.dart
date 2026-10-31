@@ -10,6 +10,7 @@ import '../sms_parser.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../lock.dart';
+import '../cloud.dart';
 import '../widgets.dart';
 import 'teach.dart';
 import 'profile.dart';
@@ -910,6 +911,8 @@ class BackupScreen extends StatelessWidget {
     );
     if (ok != true || !context.mounted) return;
     Navigator.of(context).popUntil((r) => r.isFirst);
+    // a reset phone starts at the sign-in screen; the cloud copy stays in the Google account
+    if (Cloud.signedIn) await Cloud.signOut();
     await app.resetApp();
   }
 
