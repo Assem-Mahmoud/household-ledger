@@ -823,4 +823,12 @@ const arabic = <String, String>{
   "Continue without signing in": "المتابعة دون تسجيل الدخول",
   "I have a backup file": "لدي ملف نسخة احتياطية",
   "Your data is back. One more step on this phone: allow reading your bank SMS.": "عادت بياناتك. بقيت خطوة واحدة على هذا الجوال: السماح بقراءة رسائل البنك.",
+  "Back up automatically": "النسخ الاحتياطي التلقائي",
+  "Back up": "النسخ الاحتياطي",
+  "Cloud copy saved whenever something changes; backup file once a day": "تُحفظ النسخة السحابية عند أي تغيير، وملف النسخة مرة يوميًا",
+  "Cloud copy and backup file at this interval": "النسخة السحابية وملف النسخة بهذا التكرار",
+  "Every change": "عند كل تغيير",
+  "Daily": "يوميًا",
+  "Weekly": "أسبوعيًا",
+  "Monthly": "شهريًا",
 };

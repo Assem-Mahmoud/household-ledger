@@ -960,10 +960,11 @@ class BackupScreen extends StatelessWidget {
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const T('Back up automatically every day'),
+                  title: const T('Back up automatically'),
                   value: app.flag('autoBackup'),
                   onChanged: (v) => app.setSetting('autoBackup', v ? '1' : '0'),
                 ),
+                const BackupFrequencyTile(dense: true),
                 Row(children: [
                   Expanded(
                     child: FilledButton.icon(
@@ -1072,4 +1073,36 @@ class BackupScreen extends StatelessWidget {
       },
     );
   }
+}
+
+/// How often automatic backups run (cloud copy and backup file). Used in Backup and in Profile.
+class BackupFrequencyTile extends StatelessWidget {
+  final bool dense;
+  const BackupFrequencyTile({super.key, this.dense = false});
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: app,
+        builder: (context, _) => ListTile(
+          contentPadding: dense ? EdgeInsets.zero : null,
+          leading: dense ? null : const Icon(Icons.schedule),
+          title: const T('Back up'),
+          subtitle: T(app.backupEvery == 'change'
+              ? 'Cloud copy saved whenever something changes; backup file once a day'
+              : 'Cloud copy and backup file at this interval'),
+          trailing: DropdownButton<String>(
+            value: app.backupEvery,
+            underline: const SizedBox.shrink(),
+            items: [
+              DropdownMenuItem(value: 'change', child: T('Every change')),
+              DropdownMenuItem(value: 'daily', child: T('Daily')),
+              DropdownMenuItem(value: 'weekly', child: T('Weekly')),
+              DropdownMenuItem(value: 'monthly', child: T('Monthly')),
+            ],
+            onChanged: (v) {
+              if (v != null) app.setSetting('backupEvery', v);
+            },
+          ),
+        ),
+      );
 }

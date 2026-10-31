@@ -145,6 +145,10 @@ class Cloud {
     if (!ready || !signedIn || _saving || !app.flag('onboarded') || app.setupRestore) return;
     _saving = true;
     try {
+      if (app.backupEvery != 'change') {
+        final ms = int.tryParse(app.settings['cloudBackupAt'] ?? '');
+        if (ms != null && DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ms)).inHours < app.backupEveryDays * 24 - 2) return;
+      }
       final fp = _fingerprint(await app.backupJson(forCloud: true));
       if (fp != app.settings['cloudHash']) await backup();
     } catch (_) {

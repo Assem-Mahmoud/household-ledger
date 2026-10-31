@@ -1480,11 +1480,16 @@ class AppState extends ChangeNotifier {
     return ok;
   }
 
-  /// Daily automatic backup, run when the app opens.
+  /// How often automatic backups run: 'change' (cloud: whenever something changed; file: daily),
+  /// 'daily', 'weekly' or 'monthly'.
+  String get backupEvery => settings['backupEvery']?.isNotEmpty == true ? settings['backupEvery']! : 'change';
+  int get backupEveryDays => switch (backupEvery) { 'weekly' => 7, 'monthly' => 30, _ => 1 };
+
+  /// Automatic backup to the chosen file, run when the app opens, at the chosen interval.
   Future<void> autoBackupIfDue() async {
     if (backupUri.isEmpty || !flag('autoBackup') || txns.isEmpty) return;
     final d = daysSinceBackup;
-    if (d != null && d < 1) return;
+    if (d != null && d < backupEveryDays) return;
     await backupNow();
   }
 

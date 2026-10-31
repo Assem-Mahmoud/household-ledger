@@ -11,7 +11,7 @@ import 'help.dart';
 import '../lock.dart';
 import '../cloud.dart';
 import '../periods.dart' show shortDate;
-import 'settings.dart' show BackupScreen, SettingsScreen, rescanAfterChange;
+import 'settings.dart' show BackupFrequencyTile, BackupScreen, SettingsScreen, rescanAfterChange;
 
 /// Your name, how your money month works, and the accounts and cards you spend from.
 class ProfileScreen extends StatelessWidget {
@@ -606,6 +606,7 @@ class _CloudCard extends StatelessWidget {
                         ),
                       ),
                     ]),
+                    const BackupFrequencyTile(dense: true),
                     Align(
                       alignment: AlignmentDirectional.centerEnd,
                       child: TextButton(onPressed: busy ? null : () => _signOut(context), child: const T('Sign out')),
