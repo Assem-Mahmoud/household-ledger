@@ -33,6 +33,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int paydayDay = 27;
   bool reminderOn = true;
   final incomeCtl = TextEditingController();
+  final nameCtl = TextEditingController(text: app.userName);
   late Set<int> off;
   String start = 'month';
   DateTime? picked;
@@ -60,6 +61,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void dispose() {
     incomeCtl.dispose();
+    nameCtl.dispose();
     super.dispose();
   }
 
@@ -113,31 +115,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     app.goToday();
     if (smsAllowed && start != 'today') app.openActivity(0);
     widget.onDone();
-  }
-
-  Future<void> _cloudRestore() async {
-    final m = ScaffoldMessenger.of(context);
-    setState(() => busy = true);
-    try {
-      final err = await Cloud.signIn();
-      if (err != null) {
-        if (err.isNotEmpty) m.showSnackBar(SnackBar(content: Text(tr('Could not sign in: {e}', {'e': err}))));
-        return;
-      }
-      if (await Cloud.info() == null) {
-        m.showSnackBar(SnackBar(content: Text(tr('Signed in. There is no cloud copy yet, so let\'s set up the app.'))));
-        return;
-      }
-      final msg = await Cloud.restore();
-      if (msg.isNotEmpty) {
-        m.showSnackBar(SnackBar(content: Text(msg)));
-        return;
-      }
-      await app.setSetting('onboarded', '1');
-      widget.onDone();
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
   }
 
   Future<void> _restore() async {
@@ -203,19 +180,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buttons(BuildContext context) {
-    if (step == 0) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        _primary(tr('Get started'), _next),
-        const SizedBox(height: 6),
-        TextButton(onPressed: busy ? null : _restore, child: const T('I have a backup — restore it')),
-        if (Cloud.ready)
-          TextButton.icon(
-            onPressed: busy ? null : _cloudRestore,
-            icon: const Icon(Icons.cloud_download_outlined, size: 18),
-            label: const T('Restore from my Google account'),
-          ),
-      ]);
-    }
+    if (step == 0) return const SizedBox.shrink(); // sign-in buttons are part of the first page
+
     if (step == 1) {
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _primary(tr('Allow SMS & notifications'), () => _sms(true)),
@@ -266,50 +232,157 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _language(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final c = lc;
     if (!_brandPlayed) Future.delayed(const Duration(milliseconds: 2000), () => _brandPlayed = true);
+    Widget langChip(String code, String label) {
+      final on = lang == code;
+      return Material(
+        color: on ? c.primary : Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => app.setLanguagePref(code),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            child: Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: on ? c.onPrimary : c.text)),
+          ),
+        ),
+      );
+    }
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const SizedBox(height: 8),
+      // language switch, always reachable at the top
+      Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(21)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [langChip('en', 'English'), langChip('ar', 'العربية')]),
+        ),
+      ),
+      const SizedBox(height: 4),
       Center(
         child: _brandPlayed
-            ? const BrandTile(size: 100)
-            : Play(ms: 1100, builder: (context, t) => BrandTile(size: 100, progress: t)),
+            ? const BrandTile(size: 92)
+            : Play(ms: 1100, builder: (context, t) => BrandTile(size: 92, progress: t)),
       ),
-      const SizedBox(height: 20),
+      const SizedBox(height: 18),
       Center(
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: _brandPlayed
-              ? const Wordmark(height: 44)
-              : Play(ms: 1500, delay: 250, builder: (context, t) => Wordmark(height: 44, progress: t)),
+              ? const Wordmark(height: 42)
+              : Play(ms: 1500, delay: 250, builder: (context, t) => Wordmark(height: 42, progress: t)),
         ),
       ),
       const SizedBox(height: 12),
       Entrance(
         delay: _brandPlayed ? 0 : 450,
-        child: T('Track income and spending from your bank SMS, plan each month, and see where your money goes. Everything stays on your phone.',
+        child: T('Track income and spending from your bank SMS, plan each month, and see where your money goes.',
             textAlign: TextAlign.center, style: TextStyle(fontSize: 15, height: 1.45, color: cs.onSurfaceVariant)),
       ),
-      const SizedBox(height: 28),
+      const SizedBox(height: 26),
+      if (Cloud.ready) ...[
+        Entrance(
+          delay: _brandPlayed ? 0 : 600,
+          child: FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            onPressed: busy ? null : _google,
+            child: busy
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : Row(mainAxisSize: MainAxisSize.min, children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                      child: const Text('G', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF4285F4))),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(tr('Continue with Google'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  ]),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Entrance(
+          delay: _brandPlayed ? 0 : 650,
+          child: T('Your data is backed up to your Google account and comes back on a new phone.',
+              textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: c.muted)),
+        ),
+        const SizedBox(height: 18),
+        Entrance(
+          delay: _brandPlayed ? 0 : 700,
+          child: Row(children: [
+            Expanded(child: Divider(color: c.divider)),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: T('or continue without signing in', style: TextStyle(fontSize: 13, color: c.muted))),
+            Expanded(child: Divider(color: c.divider)),
+          ]),
+        ),
+        const SizedBox(height: 14),
+      ],
       Entrance(
-        delay: _brandPlayed ? 0 : 600,
-        child: T('Choose your language', style: TextStyle(fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
+        delay: _brandPlayed ? 0 : 750,
+        child: TextField(
+          controller: nameCtl,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.done,
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _withoutAccount(),
+          decoration: InputDecoration(
+            labelText: tr('Your name'),
+            prefixIcon: const Icon(Icons.person_outline),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
       ),
       const SizedBox(height: 10),
       Entrance(
-        delay: _brandPlayed ? 0 : 700,
-        child: _Choice(
-          title: 'العربية',
-          subtitle: tr('Right-to-left layout'),
-          selected: lang == 'ar',
-          onTap: () => app.setLanguagePref('ar'),
-          raw: true,
+        delay: _brandPlayed ? 0 : 800,
+        child: OutlinedButton(
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+          onPressed: busy || nameCtl.text.trim().isEmpty ? null : _withoutAccount,
+          child: Text(tr('Continue without signing in'), style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
         ),
       ),
-      Entrance(
-        delay: _brandPlayed ? 0 : 800,
-        child: _Choice(title: 'English', selected: lang == 'en', onTap: () => app.setLanguagePref('en'), raw: true),
-      ),
+      const SizedBox(height: 4),
+      TextButton(onPressed: busy ? null : _restore, child: const T('I have a backup file')),
     ]);
+  }
+
+  Future<void> _withoutAccount() async {
+    final name = nameCtl.text.trim();
+    if (name.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    await app.setSetting('userName', name, notify: false);
+    _next();
+  }
+
+  /// Google sign-in on the first screen: brings back the cloud copy if there is one, otherwise continues setup.
+  Future<void> _google() async {
+    final m = ScaffoldMessenger.of(context);
+    setState(() => busy = true);
+    try {
+      final err = await Cloud.signIn();
+      if (err != null) {
+        if (err.isNotEmpty) m.showSnackBar(SnackBar(content: Text(tr('Could not sign in: {e}', {'e': err}))));
+        return;
+      }
+      if (await Cloud.info() != null) {
+        final msg = await Cloud.restore();
+        if (msg.isNotEmpty) {
+          m.showSnackBar(SnackBar(content: Text(msg)));
+          return;
+        }
+        await app.setSetting('onboarded', '1');
+        m.showSnackBar(SnackBar(content: Text(tr('Welcome back. Your data was restored from the cloud.'))));
+        widget.onDone();
+        return;
+      }
+      final name = nameCtl.text.trim().isNotEmpty ? nameCtl.text.trim() : Cloud.name;
+      if (name.isNotEmpty) await app.setSetting('userName', name, notify: false);
+      _next();
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   Widget _disclosure(BuildContext context) {

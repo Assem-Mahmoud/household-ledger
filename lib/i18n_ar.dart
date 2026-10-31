@@ -816,4 +816,10 @@ const arabic = <String, String>{
   "Signed out. Your data stays on this phone.": "تم تسجيل الخروج، وبياناتك باقية على هذا الجوال.",
   "Restore from my Google account": "استعادة من حساب Google",
   "Signed in. There is no cloud copy yet, so let's set up the app.": "تم تسجيل الدخول. لا توجد نسخة سحابية بعد، فلنُعدّ التطبيق.",
+  "Track income and spending from your bank SMS, plan each month, and see where your money goes.": "تتبّع دخلك ومصاريفك من رسائل البنك، وخطّط لكل شهر، واعرف أين تذهب أموالك.",
+  "Continue with Google": "المتابعة عبر Google",
+  "Your data is backed up to your Google account and comes back on a new phone.": "تُنسخ بياناتك إلى حساب Google وتعود إليك على أي جوال جديد.",
+  "or continue without signing in": "أو تابع دون تسجيل الدخول",
+  "Continue without signing in": "المتابعة دون تسجيل الدخول",
+  "I have a backup file": "لدي ملف نسخة احتياطية",
 };
